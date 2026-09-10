@@ -259,11 +259,21 @@ Nothing else. No manufacturers, no products, no prices, no rules, no authorizati
 
 ## 7. Decisions needed
 
-**D-1 — Supabase project access (blocking).** The MCP connector is scoped to organization
-`huuuvusdyumfjwxkmxhn`, which contains only `Elephante` and `Elephante S`. Project
-`bvrtpgumrmtoqxcnpmnu` returns *"You do not have permission to perform this action"*. Either it
-sits under a different Supabase account, or the connector's scope excludes it. Resolution options
-are listed in the handover note; nothing is applied until this is settled.
+**D-1 — Supabase project access. RESOLVED.** Project `bvrtpgumrmtoqxcnpmnu` sits under a
+different Supabase account from the one the MCP connector is authorized against, and returned
+*"You do not have permission to perform this action"*. A dedicated project was created instead in
+the reachable organization:
+
+| | |
+|---|---|
+| Name | SmartPage Intelligence |
+| Ref | `tyioiiszcftkaayhlsac` |
+| Region | ap-south-1 (Mumbai — lowest latency to Saudi/GCC) |
+| API URL | `https://tyioiiszcftkaayhlsac.supabase.co` |
+| Cost | $0/month |
+
+All 13 migrations are applied there. The SQL is portable, so moving to a different Postgres later
+is one run of `./scripts/migrate.sh`.
 
 **D-2 — Authentication.** The quickstart supplied (`@supabase/server`, publishable key, JWKS URL)
 implies **Supabase Auth**. Phase 0 specified **Auth.js with our own users table**. The schema
