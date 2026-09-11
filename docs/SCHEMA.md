@@ -259,7 +259,7 @@ Nothing else. No manufacturers, no products, no prices, no rules, no authorizati
 
 ## 7. Decisions needed
 
-**D-1 — Supabase project access. RESOLVED.** Project `bvrtpgumrmtoqxcnpmnu` sits under a
+**D-1 — Supabase project access. RESOLVED.** The schema lives on the Supabase project owned by the aaymanasrar20@gmail.com account, ref `bvrtpgumrmtoqxcnpmnu`. Migrations are applied over the Management API with a personal access token (`scripts/migrate-supabase.mjs`), which avoids needing the database password. `scripts/verify-guards.mjs` re-runs the enforcement suite against it at any time.
 different Supabase account from the one the MCP connector is authorized against, and returned
 *"You do not have permission to perform this action"*. A dedicated project was created instead in
 the reachable organization:
