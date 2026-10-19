@@ -120,6 +120,19 @@ every execution with inputs, outputs and evidence.
 
 `rule_executions` is the audit trail that makes a quantity traceable, and is append-only.
 
+`engineering_rules.confidence` (`code` / `spec` / `local`) records how far a rule can be relied on
+and is **not null** — an untagged rule is not representable. `source_document`, `source_rule_id`,
+`source_verified` and `verification_note` record where it came from and whether that source was
+read; a check constraint requires a note whenever `source_verified` is false.
+
+`system_id` is nullable: null means cross-discipline, applying to every system selected on the
+project. The alternative — a fake "cross-discipline" row in `systems` — would be selectable by a
+client on a project, which it is not.
+
+A `spec` or `local` rule is not scope by itself. `forbid_unsupported_scope()` rejects a BOQ moving
+to `validated`, `approved` or `issued` if any item's quantity traces back to one without a
+`boq_item_sources` citation of type `sow_clause`, `drawing` or `client_standard`.
+
 ### 2.4 Catalogue and pricing
 
 `product_models` carries `authorized_status`, `lifecycle_status` and `revision`. Automatic
@@ -231,17 +244,23 @@ Sequential, forward-only, each independently reviewable. Applied to Supabase via
 | 0003 | `projects_and_building_model` | clients, projects, buildings, floors, rooms, areas, walls, openings, doors, zones |
 | 0004 | `documents` | documents, drawings, drawing_pages, drawing_objects, document_chunks, extraction_runs, extraction_proposals |
 | 0005 | `systems_and_rules` | systems, project_systems, system_requirements, engineering_rules, rule_versions, rule_tests, rule_executions |
-| 0006 | `catalogue` | manufacturers, products, product_models, product_documents, authorizations, alternatives, suppliers |
-| 0007 | `pricing` | price_lists, vendor_prices, labor_rates, installation_rates, tc_rates, pricing_rules |
-| 0008 | `design` | design_devices, device_connections, cable_routes, system_interfaces |
-| 0009 | `boq_and_quotation` | boqs, boq_items, boq_item_sources, quotations, quotation_revisions, quotation_items, quotation_terms |
-| 0010 | `procurement` | rfqs, rfq_suppliers, supplier_responses, supplier_response_items |
-| 0011 | `governance` | validation_results, review_tasks, approvals, audit_logs |
-| 0012 | `immutability_triggers` | freeze triggers (§5 above) and append-only guards |
-| 0013 | `rls_lockdown` | enable RLS on every public table with **no** permissive policies |
-| 0014 | `seed_placeholders` | roles, permissions, the three system codes. **Nothing else.** |
+| 0006 | `catalogue_and_pricing` | manufacturers, products, product_models, authorizations, suppliers, price_lists, vendor_prices, rates |
+| 0007 | `design` | design_devices, device_connections, cable_routes, system_interfaces |
+| 0008 | `boq_quotation_procurement` | boqs, boq_items, boq_item_sources, quotations, quotation_revisions, quotation_items, quotation_terms, rfqs, supplier_responses |
+| 0009 | `governance` | validation_results, review_tasks, approvals, audit_logs |
+| 0010 | `immutability_triggers` | freeze triggers (§5 above) and append-only guards |
+| 0011 | `rls_lockdown` | enable RLS on every public table with **no** permissive policies |
+| 0012 | `seed_placeholders` | roles, permissions, the three system codes. **Nothing else.** |
+| 0013 | `harden_function_search_path` | pin `search_path = ''` on all functions from 0001 and 0010 |
+| 0014 | `rule_provenance_and_scope_gate` | `rule_confidence` enum; confidence and source columns on engineering_rules; nullable `system_id`; `forbid_unsupported_scope()` |
+| 0015 | `seed_elv_installation_rules` | two further systems; the 42 ELV guide rules as **draft** versions with test cases |
+| 0016 | `tia568b_verification_and_ksa_cctv` | re-verifies and corrects Part A against ANSI/TIA/EIA-568-B; adds 9 cabling rules and 6 Saudi CCTV rules (57 total) |
+| 0017 | `spt_engineering_rules_library` | `network` + `ups` systems; `jurisdiction_overlay`; `rule_relationships` conflict registry with approval gate; `rule_precedence_policy`; the 80-rule SPT library (137 total) |
 
-### 6.1 Why migration 0013 matters
+The numbering above was previously out of step with the files in `supabase/migrations/`; it is
+realigned here to match them.
+
+### 6.1 Why migration 0011 matters
 
 A Supabase project exposes PostgREST on the public internet using the publishable key. Any table
 without RLS is readable by anyone holding that key. Enabling RLS with no policies denies all

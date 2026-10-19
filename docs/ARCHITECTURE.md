@@ -480,6 +480,67 @@ Interim position: the framework treats `conditions` and `calculation` as opaque 
 with a pluggable evaluator, so the evaluator can be implemented once real rules exist without
 touching storage, lifecycle or audit. See §16, D-2.
 
+**Status: the precondition is now met.** Migrations 0015-0017 encode 137 rules — the ELV &
+Telecom Installation Rule Guide Book, additions from ANSI/TIA/EIA-568-B, and the Saudi security
+surveillance camera law. They are stored, tagged, traceable and versioned, and none of them
+executes: every version is `draft` and every payload carries `"evaluator": "unassigned"`. The one
+exception is X-06, whose evaluator is `enforced_in_sql` because it is implemented as a trigger
+(§9.5). Designing the expression language against these 137 rules — rather than against imagined
+ones — is now unblocked and is the next piece of work here. The shapes the real rules take are
+`limit`, `spacing`, `clearance`, `coverage`, `selection`, `budget`, `interface`, `checklist` and
+`governance`; all but one are constraints that emit a validation result rather than calculations
+that emit a quantity, which is itself a finding the deferral was meant to surface. The exception is
+A-14 (minimum two outlets per work area), which emits `{"emits":"quantity","unit":"outlet"}` — the
+first rule in the set that can put a number on a BOQ line by itself.
+
+### 9.5 Conflict registry and precedence (§11.4)
+
+§9.3 says the engine never resolves a conflict silently. Until the fourth source document arrived
+that was cheap to honour, because no two documents disagreed. The SPT Engineering Rules Library
+(80 rules, migration 0017) overlaps the earlier three heavily and disagrees with them in three
+places, so the requirement is now load-bearing.
+
+`rule_relationships` records how a rule from one source relates to a rule from another:
+`agrees`, `refines`, `resolves`, `supersedes` or `conflicts`, each with a note. It is enforced, not
+documentation: `forbid_approving_conflicted_rule()` refuses to move a rule version to
+`approved`/`active` while that rule sits on an unresolved `conflicts` or `supersedes` row — **on
+either side**. Resolving requires both `resolved_at` and a `resolution_note`.
+
+The worked case is fibre bend radius. `SPT-SC-04` states a flat 20× under tension; `ELV-A-02` was
+corrected on 24 Sep against the supplied 568-B text to 20× interbuilding, 15× intrabuilding. Both
+are plausible, both are tagged CODE, and without the registry both would have been approvable.
+
+`rule_precedence_policy` stores an ordered list of authorities, rank 1 highest. The SPT library
+supplies the first one the platform has ever had. It is seeded **unapproved**, because §9.3 permits
+precedence to resolve a conflict only where it has been explicitly configured *and* approved.
+Note what its order implies — a project SOW outranks the Saudi Building Code and NCA — which is
+defensible for scope but cannot override a statutory duty. Approving it should carry that
+carve-out.
+
+### 9.6 Rule confidence and the scope gate (§11.4, §16)
+
+Real engineering rules do not all carry the same authority, and the difference is not cosmetic.
+`engineering_rules.confidence` (`code` / `spec` / `local`, migration 0014) records it:
+
+- `code` — stated in a published standard. May bind on its own.
+- `spec` — project or client practice. Binds only where the SOW or drawing calls it out.
+- `local` — one jurisdiction or regulator. Never carried across borders unchecked.
+
+The column is `not null`, so an untagged rule is not representable. `forbid_unsupported_scope()`
+enforces the consequence at the transition into `validated`, `approved` or `issued`: a BOQ item
+whose quantity traces through `rule_executions` to a `spec` or `local` rule must carry a
+`boq_item_sources` row of type `sow_clause`, `drawing` or `client_standard`, or the transition is
+rejected and the offending items are named.
+
+This is the structural counterpart to the §10.3 no-guess policy. That policy stops an *AI*
+inference becoming a quantity; this one stops a *real but non-binding* rule doing the same. The
+worked example is C-01: metallic conduit for perimeter cameras is a genuine SmartPage practice and
+a common over-pricing trap, and it cannot reach an approved BOQ without a clause behind it.
+
+Alongside it, `source_document`, `source_rule_id`, `source_verified` and `verification_note` record
+where a rule came from and whether that source was actually read. An unverified rule must say what
+is missing — a check constraint requires the note.
+
 ---
 
 ## 10. Pricing and commercial (§13)
@@ -610,9 +671,9 @@ invent these. Build impact of each:
 
 | Item | Blocks | Status |
 |---|---|---|
-| Approved system design standards/methodologies | Rules engine, design modules | Not supplied |
-| Project-specific engineering rules and precedence | Prompts E–H; D-2; D-6 | Not supplied |
-| Applicable Saudi/GCC authority requirements | Rule jurisdiction model | Not supplied |
+| Approved system design standards/methodologies | Rules engine, design modules | **Partial** — 57 rules encoded as draft in 0015/0016 from three documents (ELV guide, TIA/EIA-568-B, Saudi camera law) |
+| Project-specific engineering rules and precedence | Prompts E–H; D-2; D-6 | **Partial** — rules supplied and tagged; no approved precedence policy yet (§9.3) |
+| Applicable Saudi/GCC authority requirements | Rule jurisdiction model | **Partial** — the Saudi security surveillance camera law is encoded (6 LOCAL rules, jurisdiction `SA`). SBC 801, Civil Defense and CST EMF remain items to confirm per project under X-01 |
 | Manufacturer authorization records | Catalogue authorization (§12) | Not supplied |
 | Approved product catalogue | Product selection; BOQ | Not supplied |
 | Current and historical pricing | Pricing engine | Not supplied |
@@ -623,6 +684,18 @@ invent these. Build impact of each:
 | Typical assumptions and exclusions | Quotation engine | Not supplied |
 | Integration standards | Integration matrix (§15) | Not supplied |
 | Historical ground-truth projects | Testing (§24); accuracy measurement | Not supplied |
+
+The first row moved off "Not supplied" on 24 Sep 2026. It is worth being precise about what that
+buys: the rules are stored, tagged and traceable, but all 57 versions are `draft`, 39 of them carry
+a `verification_note` saying the cited source was not read or is superseded, and no evaluator
+exists. The platform can now *answer* where a rule came from. It cannot yet *run* one.
+
+The 568-B document is the model for how a second source should land: it did not merely add rules,
+it **corrected two** (A-02's fibre bend multiplier, A-11's field-test set) and **confirmed by
+absence** that two SPEC tags were right, because the figures genuinely are not in the standard.
+Both corrections were applied to version 1 in place — legitimate only because those versions are
+still `draft`. The first rule to reach `approved` ends that freedom, and every later correction
+becomes a new version (§12).
 
 **Phases 0–2 (foundation, workspace, schema, catalogue and rule *frameworks*) can be built now
 without any of this.** Everything from the design modules onward produces an empty shell until the

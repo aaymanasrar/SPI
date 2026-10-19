@@ -43,6 +43,10 @@ If a value is unknown, it stays unknown. That is a supported state throughout th
 | `access-control/door-types/` | Door classifications and the hardware each type requires |
 | `access-control/equipment/` | Controllers, readers, locks, exit devices, door contacts |
 | `access-control/exceptions/` | Life-safety overrides, free-egress cases, and other departures |
+| `structured-cabling/rules/` | Copper and fibre horizontal cabling: length, bend, pathway, fire rating, separation, bonding, certification |
+| `outdoor-infrastructure/rules/` | Mast siting, generator setback, noise and RF exposure |
+| `network/rules/` | PoE budgets, reach, oversubscription, segmentation, redundancy |
+| `ups/rules/` | UPS sizing, battery runtime and ventilation, topology, redundancy |
 | `vendors/` | Manufacturer and supplier information, authorization records, contact and commercial terms |
 | `products/` | Datasheets, specifications and model information for authorized products |
 | `pricing/` | Approved price lists, labour rates, installation rates, testing & commissioning rates |
@@ -93,10 +97,49 @@ controlled storage instead.
 
 ## Current status
 
-**Empty.** No engineering rules, products, prices, standards, approvals or vendor information have
-been supplied yet.
+**Three documents supplied, 57 rules encoded.** The *ELV & Telecom Installation Rule Guide Book*
+(SmartPage, 21 Sep 2026) arrived on 24 Sep 2026 with 42 rules; a condensed copy of
+**ANSI/TIA/EIA-568-B** and the Saudi **Law of the Use of Security Surveillance Cameras** followed
+the same day, adding 15 more and re-verifying nine:
 
-Phases 0–2 of the build (foundation, project workspace, schema, and the catalogue and rules
-*frameworks*) proceed without this material. Everything from the design modules onward produces an
-empty shell until it arrives — so collecting it is the real critical path, and it moves slower
-than the software does.
+| Part | Scope | Rules | File |
+|---|---|---|---|
+| A | Structured cabling (ANSI/TIA-568, NEC Art. 800) | 21 | `structured-cabling/rules/elv-guide-part-a.md` |
+| B | Fire detection and life safety (NFPA 72, BS 5839) | 11 | `fire-alarm/rules/elv-guide-part-b.md` |
+| C | Security, CCTV and access control | 7 | `cctv/rules/elv-guide-part-c.md`, `access-control/rules/elv-guide-part-c.md` |
+| D | Outdoor infrastructure and mast siting | 6 | `outdoor-infrastructure/rules/elv-guide-part-d.md` |
+| X | Cross-discipline and handover pack | 6 | `standards-references/elv-telecom-installation-rule-guide/` |
+| KSA | Saudi security surveillance camera law (CCTV) | 6 | `cctv/rules/ksa-security-camera-law.md` |
+
+Each document has a source record, and **all three should be read before any figure from these
+rules is quoted at a client**:
+
+- [ELV & Telecom Installation Rule Guide Book](standards-references/elv-telecom-installation-rule-guide/README.md)
+  — confidence tags, source register, and the guide's own critical review of its evidence.
+- [ANSI/TIA/EIA-568-B](standards-references/tia-eia-568-b/README.md) — what it confirms, what it
+  **corrects**, and why a condensed summary of a superseded edition still does not count as verified.
+- [Saudi security surveillance camera law](standards-references/saudi-security-camera-law/README.md)
+  — statutory, with per-camera fines, and the one technical figure that is still unconfirmed.
+
+That distinction is carried into the database as `engineering_rules.source_verified` and
+`verification_note`: **18 of the 57 rules are confirmed against a source that was actually opened,
+and 39 are not.** The 568-B document moved nine Part A rules from *"from general knowledge"* to
+*"confirmed against a condensed summary of the superseded edition"* — a real gain in provenance,
+and deliberately still not `source_verified`.
+
+The encoding is `supabase/migrations/0015_seed_elv_installation_rules.sql` and
+`0016_tia568b_verification_and_ksa_cctv.sql`. Every one of the 57 rule versions is **draft**. None can execute, both because approval is an Engineering Manager act under spec 11.2
+and because the rule expression language does not exist yet (ARCHITECTURE.md §9.4) — these are the
+first real rules, and they are what that language now has to be designed against.
+
+**The two figures to chase first**, because both set quantities rather than pass/fail checks:
+
+1. **Ministerial Decision 22688/1444** and the MOI technical specification — the CCTV **retention
+   period** (reported as 90 days) sizes NVR and storage, and therefore a large part of a Saudi CCTV
+   BOQ. It is currently secondary-sourced only.
+2. **ANSI/TIA-568.2-D** — rule A-14 (minimum two outlets per work area) is CODE and emits a
+   *quantity*, so it can drive outlet, faceplate, jack and cable counts without a SOW clause.
+
+**Still not supplied:** products, prices, vendors, authorizations, labour and installation rates,
+BOQ and quotation templates, and historical ground-truth projects. Everything from the design
+modules onward still produces an empty shell until those arrive.
