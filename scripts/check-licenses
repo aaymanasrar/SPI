@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Licence gate. Fails the build on anything outside the allowed set.
+#
+#   allowed    MIT, BSD, Apache-2.0, ISC, PSF, MPL-2.0, Unlicense, Python-2.0
+#              (MPL only where the dependency runs as a SEPARATE PROCESS, e.g. LibreOffice)
+#   forbidden  AGPL (so: no PyMuPDF), GPL shipped to the browser, HyperFormula, ODA SDK
+#
+# LGPL is on neither list, so it is treated as forbidden here and must be an
+# explicit, recorded decision rather than something that drifts in. That is why
+# WordCraft uses python-docx (MIT) instead of docxtpl (LGPL-2.1).
+set -uo pipefail
+cd "$(dirname "$0")/.."
+fail=0
+
+DENY='AGPL|GNU Affero|GPLv3|GPL-3|GPL-2|LGPL|Lesser General|SSPL|Commons Clause|BUSL|Business Source'
+# An unreadable licence is not a cleared licence. UNKNOWN fails until someone
+# looks it up and either pins it or removes the package.
+UNKNOWN='UNKNOWN|^$'
+DENY_PKG='pymupdf.*|fitz.*|hyperformula.*|open-design.*'
+
+echo "== Python (engines/.venv) =="
+if [ -x engines/.venv/bin/pip-licenses ]; then
+  out=$(engines/.venv/bin/pip-licenses --format=plain 2>/dev/null | tail -n +2 | sed '/^[[:space:]]*$/d')
+  n=$(printf '%s\n' "$out" | wc -l | tr -d ' ')
+  if [ "$n" -lt 2 ]; then
+    # A gate that inspects nothing and passes is worse than no gate.
+    echo "  ERROR: pip-licenses returned $n rows — the venv is empty or the parse broke."
+    fail=1
+  else
+    bad=$(printf '%s\n' "$out" | grep -Ei "$DENY" || true)
+    badpkg=$(printf '%s\n' "$out" | awk '{print tolower($1)}' | grep -Ei "^($DENY_PKG)$" || true)
+    unknown=$(printf '%s\n' "$out" | grep -Ei "$UNKNOWN" || true)
+    if [ -n "$bad$badpkg$unknown" ]; then
+      echo "LICENCE POLICY VIOLATION:"
+      [ -n "$bad" ] && printf '  forbidden licence: %s\n' "$bad"
+      [ -n "$badpkg" ] && printf '  forbidden package: %s\n' "$badpkg"
+      [ -n "$unknown" ] && printf '  licence could not be determined: %s\n' "$unknown"
+      fail=1
+    else
+      echo "  $n packages inspected, all within policy"
+      printf '%s\n' "$out" | awk '{$1="";$2="";print}' | sed 's/^  *//' | sort -u | sed 's/^/    /'
+    fi
+  fi
+else
+  echo "  SKIP: engines/.venv not built (run: python3 -m venv engines/.venv)"
+fi
+
+echo "== JavaScript (npm) =="
+if command -v npx >/dev/null 2>&1 && [ -d node_modules ]; then
+  if npx --no-install license-checker --version >/dev/null 2>&1; then
+    out=$(npx --no-install license-checker --summary 2>/dev/null)
+    echo "$out" | sed 's/^/  /'
+    if echo "$out" | grep -Ei "$DENY" >/dev/null; then
+      echo "FORBIDDEN LICENCE in npm tree"; fail=1
+    fi
+  else
+    echo "  SKIP: license-checker not installed (npm i -D license-checker)"
+  fi
+else
+  echo "  SKIP: no node_modules"
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo; echo "LICENCE CHECK FAILED"; exit 1
+fi
+echo; echo "Licence check passed."
