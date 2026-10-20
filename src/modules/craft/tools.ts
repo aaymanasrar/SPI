@@ -43,6 +43,26 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "pdf.extract": {
+    name: "pdf.extract",
+    engine: "pdf",
+    previewPermission: "craft.preview",
+    // Extraction only reads. There is nothing to commit: what it returns is a
+    // proposal for an engineer to promote, like a client BOQ read.
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "pdf.pack": {
+    name: "pdf.pack",
+    engine: "pdf",
+    previewPermission: "craft.preview",
+    commitPermission: "craft.commit",
+    // A submittal pack is an outward-facing document. The AI may assemble a
+    // preview; issuing it is a person's decision.
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
 };
 
 export function policyFor(tool: string): ToolPolicy {

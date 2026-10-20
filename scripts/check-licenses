@@ -5,9 +5,12 @@
 #              (MPL only where the dependency runs as a SEPARATE PROCESS, e.g. LibreOffice)
 #   forbidden  AGPL (so: no PyMuPDF), GPL shipped to the browser, HyperFormula, ODA SDK
 #
-# LGPL is on neither list, so it is treated as forbidden here and must be an
-# explicit, recorded decision rather than something that drifts in. That is why
-# WordCraft uses python-docx (MIT) instead of docxtpl (LGPL-2.1).
+# LGPL is on neither list, so it must be an explicit, RECORDED decision rather
+# than something that drifts in. That is why WordCraft uses python-docx (MIT)
+# instead of docxtpl (LGPL-2.1). The npm half delegates to
+# scripts/npm-licence-policy.mjs, which judges each package rather than grepping
+# the whole report: "no GPL in the browser bundle" and "no GPL anywhere" are
+# different policies, and a flat grep can only express the second.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -42,22 +45,29 @@ if [ -x engines/.venv/bin/pip-licenses ]; then
     fi
   fi
 else
-  echo "  SKIP: engines/.venv not built (run: python3 -m venv engines/.venv)"
+  echo "  engines/.venv is not built, so the Python half cannot run."
+  echo "  Build it (python3 -m venv engines/.venv) -- a gate that did not run is not a pass."
+  fail=1
 fi
 
 echo "== JavaScript (npm) =="
 if command -v npx >/dev/null 2>&1 && [ -d node_modules ]; then
-  if npx --no-install license-checker --version >/dev/null 2>&1; then
-    out=$(npx --no-install license-checker --summary 2>/dev/null)
-    echo "$out" | sed 's/^/  /'
-    if echo "$out" | grep -Ei "$DENY" >/dev/null; then
-      echo "FORBIDDEN LICENCE in npm tree"; fail=1
-    fi
+  # Probe the binary, not an exit code: license-checker --version prints the
+  # version and still exits 1, which read as "not installed" and quietly turned
+  # this half of the gate off.
+  if [ -x node_modules/.bin/license-checker ]; then
+    json=$(mktemp)
+    node_modules/.bin/license-checker --json >"$json" 2>/dev/null
+    node scripts/npm-licence-policy.mjs "$json" || fail=1
+    rm -f "$json"
   else
-    echo "  SKIP: license-checker not installed (npm i -D license-checker)"
+    echo "  license-checker is not installed; this half of the gate cannot run."
+    echo "  Install it (npm i -D license-checker) -- a gate that did not run is not a pass."
+    fail=1
   fi
 else
-  echo "  SKIP: no node_modules"
+  echo "  no node_modules; this half of the gate cannot run. Run npm ci first."
+  fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then

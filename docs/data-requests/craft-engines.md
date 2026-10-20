@@ -44,3 +44,40 @@ Two gaps in already-encoded data block calculations the engines will want:
   rule FA-18 cannot be computed from the catalogue. `engine_readiness` lists them.
 - **`SEC-07` / `SAES-O-207` were never retrieved**, so security UPS autonomy is an
   open assumption in rule `SPT-LP-19`.
+
+## 7 A licence decision only you can make
+
+The npm half of `scripts/check-licenses` was not running. It probed
+`license-checker --version`, which prints the version and still exits 1, so the
+gate read "not installed", printed `SKIP`, and reported **Licence check
+passed**. The Python half was genuinely clean, which is why the green looked
+believable. Both halves now fail rather than skip, and the npm half judges each
+package (`scripts/npm-licence-policy.mjs`, tested by
+`scripts/tests/licence-policy.test.sh`).
+
+With it running, two packages in the existing tree are outside the allowed set.
+Neither came from the craft engines:
+
+| Package | Licence | Why it is here |
+|---|---|---|
+| `@img/sharp-libvips-darwin-arm64` | LGPL-3.0-or-later | `next` → `sharp`, image optimisation |
+| `@img/sharp-wasm32` | Apache-2.0 AND LGPL-3.0-or-later AND MIT | unconstrained optional dep of `sharp` |
+
+Both are libvips — the same image-processing library, once as a native binary and
+once compiled to WebAssembly. Your policy forbids "GPL shipped to the browser";
+these run in the Node server runtime, and Next does not bundle `sharp` into
+client JS, so on my reading they do not breach it. LGPL is on neither your
+allowed nor your forbidden list, which is why this is your call and not mine.
+
+They are recorded as exceptions in `npm-licence-policy.mjs` and marked
+`signedOff: false`, so the gate passes but prints them with **"not yet signed off
+by the licence owner"** on every run. Three ways out:
+
+1. **Accept** — I set `signedOff: true` and the warning stops.
+2. **Add LGPL for separate-process / server-side use** to the allowed list, as
+   MPL-2.0 already is. Then neither needs an exception.
+3. **Remove them** — means giving up Next's image optimisation (`images.unoptimized`,
+   or a different loader). `@img/sharp-wasm32` could be dropped on its own via an
+   npm `overrides` entry without losing anything on macOS or Linux.
+
+Until you say, option 1's warning stays on screen. I have not changed your policy.

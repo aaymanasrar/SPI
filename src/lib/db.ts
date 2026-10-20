@@ -23,7 +23,8 @@ if (!connectionString) {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+  // `var` is required here: a `declare global` augmentation of globalThis
+  // cannot use let/const.
   var __spi_sql: ReturnType<typeof postgres> | undefined;
 }
 
