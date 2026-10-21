@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from ..core import (ENGINE_VERSION, InvalidInput, MissingItem, Provenance,
                     Storage, ToolResult, register)
 from .read_dxf import open_dxf
-from .symbols import SymbolMap
+from .symbols import SymbolMap, default_map
 
 # Blocks that are drawing furniture, not devices. Named explicitly rather than
 # pattern-guessed, and still reported so nothing vanishes silently.
@@ -30,7 +30,11 @@ IGNORED_PREFIXES = ("*",)
 class CountInput(BaseModel):
     document_id: str
     storage_key: str
-    symbol_map: dict = Field(description="a SymbolMap as data — see cad/symbols.py")
+    symbol_map: dict | None = Field(
+        None,
+        description="a SymbolMap as data — see cad/symbols.py. Omitted means the "
+                    "generic default map, which matches descriptive block names "
+                    "only and is not a client drawing standard.")
     drawing_page_id: str | None = Field(
         None, description="the drawing_pages row these objects belong to")
     layers: list[str] | None = Field(None, description="restrict to these layers")
@@ -44,7 +48,8 @@ def count_devices(data: CountInput, storage: Storage | None = None) -> ToolResul
     if storage is None:
         raise InvalidInput("cad.count_devices needs storage to fetch the document")
 
-    smap = SymbolMap.load(data.symbol_map)
+    smap = (SymbolMap.load(data.symbol_map) if data.symbol_map is not None
+            else default_map())
     doc = open_dxf(storage.read(data.storage_key), data.storage_key)
     msp = doc.modelspace()
 
@@ -105,15 +110,18 @@ def count_devices(data: CountInput, storage: Storage | None = None) -> ToolResul
 
     if unmapped:
         res.status = "missing_data"
-        res.missing = [
-            MissingItem(
-                field="symbol_mapping",
-                record=f"block:{b} layer:{l}",
-                note=f"{n} insert(s) of '{b}' on layer '{l}' are not in symbol map "
-                     f"{smap.name}@{smap.version}. Add a rule, or confirm the block "
-                     "is not a device. Counting without it would under-report.")
-            for (b, l), n in sorted(unmapped.items())
-        ]
+        res.missing = []
+        for (b, l), n in sorted(unmapped.items()):
+            note = (f"{n} insert(s) of '{b}' on layer '{l}' are not in symbol map "
+                    f"{smap.name}@{smap.version}. Add a rule, or confirm the block "
+                    "is not a device. Counting without it would under-report.")
+            why = smap.ambiguity_note(b)
+            if why:
+                # Not an oversight: this map refuses to interpret the code.
+                note += (f" This map deliberately does not interpret '{b}': {why} "
+                         "Resolve it against the drawing's legend sheet.")
+            res.missing.append(MissingItem(
+                field="symbol_mapping", record=f"block:{b} layer:{l}", note=note))
     if not tallies and not unmapped:
         res.warnings.append(
             "No block inserts matched. Either the drawing has none, or the layer "

@@ -12,7 +12,7 @@ import ezdxf
 import pytest
 from pydantic import ValidationError
 
-from craft.cad import (MARKUP_LAYER, CountInput, MarkupInput, Note, ReadDxfInput,
+from craft.cad import (MARKUP_LAYER, CountInput, default_map, MarkupInput, Note, ReadDxfInput,
                        RoomsInput, SymbolMap, count_devices, extract_rooms,
                        markup, measure_route, place_devices, read_dxf)
 from craft.cad.place import MeasureRouteInput, PlaceDevicesInput
@@ -160,6 +160,78 @@ def test_symbol_rule_matching_ignores_case_and_supports_regex():
     assert m.resolve("FD", "MECH") is None
 
 
+# ------------------------------------------------------------ default map
+DESCRIPTIVE = [
+    ("SMOKE-DETECTOR", "smoke_detector"), ("smoke_det", "smoke_detector"),
+    ("OPTICAL-SMOKE-DETECTOR", "smoke_detector"),
+    ("HEAT-DETECTOR", "heat_detector"), ("DUCT-SMOKE-DETECTOR", "duct_detector"),
+    ("MANUAL-CALL-POINT", "manual_call_point"), ("BREAK-GLASS", "manual_call_point"),
+    ("SOUNDER", "sounder"), ("SOUNDER-STROBE", "sounder_strobe"),
+    ("FACP", "fire_alarm_panel"), ("FIRE-ALARM-PANEL", "fire_alarm_panel"),
+    ("CAMERA", "camera"), ("DOME-CAMERA", "camera"), ("PTZ-CAMERA", "ptz_camera"),
+    ("NVR", "recorder"), ("CARD-READER", "card_reader"),
+    ("DOOR-CONTACT", "door_contact"), ("MAGLOCK", "magnetic_lock"),
+    ("REX", "exit_button"), ("DATA-OUTLET", "data_outlet"), ("RJ45", "data_outlet"),
+    ("WAP", "wireless_access_point"), ("ACCESS-POINT", "wireless_access_point"),
+    ("PATCH-PANEL", "patch_panel"), ("CEILING-SPEAKER", "speaker"),
+]
+
+
+@pytest.mark.parametrize("block,expected", DESCRIPTIVE)
+def test_default_map_reads_descriptive_block_names(block, expected):
+    rule = default_map().resolve(block, "ANY-LAYER")
+    assert rule is not None, f"{block} unmapped"
+    assert rule.device_type == expected
+
+
+# Each of these would be a plausible-looking wrong answer.
+@pytest.mark.parametrize("block", [
+    "SD", "FD", "HD", "MCP", "CP", "AP", "DC", "EL", "PB", "TS", "SW", "BG", "VC",
+    "PANEL", "FACEPLATE", "CONTROLLER", "CONTACT",
+])
+def test_default_map_refuses_ambiguous_codes(block):
+    """A wrong mapping is worse than a missing one: it produces a confident
+    count instead of missing_data, and nobody looks again."""
+    m = default_map()
+    assert m.resolve(block, "FA-DEVICES") is None, f"{block} was guessed"
+
+
+@pytest.mark.parametrize("block", [
+    "SD", "FD", "MCP", "PANEL", "FACEPLATE", "CONTROLLER",
+])
+def test_every_refused_code_explains_itself(block):
+    note = default_map().ambiguity_note(block)
+    assert note and len(note) > 20, block
+
+
+def test_ambiguity_note_matches_a_prefixed_block_name():
+    """Drawings name blocks SD-01, FD_02; the code is still the ambiguous part."""
+    m = default_map()
+    assert m.ambiguity_note("SD-01")
+    assert m.ambiguity_note("FD_02")
+    assert m.ambiguity_note("SMOKE-DETECTOR") is None
+
+
+def test_default_map_states_it_is_not_a_client_standard():
+    src = default_map().source_document
+    assert "NOT a client drawing standard" in src
+    assert "legend" in src
+
+
+def test_default_map_rules_are_all_valid_regexes():
+    import re
+    for rule in default_map().rules:
+        assert rule.is_regex
+        re.compile(rule.block)          # raises if malformed
+
+
+def test_no_default_rule_matches_an_empty_or_furniture_block():
+    m = default_map()
+    for block in ("", " ", "NORTH-ARROW", "TITLE-BLOCK", "GRID-BUBBLE",
+                  "SCALE-BAR", "REVISION-CLOUD", "DIM-STYLE"):
+        assert m.resolve(block, "TITLE") is None, block
+
+
 # -------------------------------------------------------------------- count
 def test_count_tallies_mapped_devices(storage):
     r = count_devices(CountInput(document_id="d", storage_key="fp.dxf",
@@ -224,6 +296,41 @@ def test_count_can_be_restricted_to_layers(storage):
                                  symbol_map=SYMBOL_MAP, layers=["CCTV"]), storage)
     assert r.outputs["counts"] == [{"system": "cctv", "device_type": "camera",
                                    "unit": "no", "quantity": 1}]
+
+
+def test_count_falls_back_to_the_default_map(storage):
+    """symbol_map omitted uses the generic default rather than refusing."""
+    r = count_devices(CountInput(document_id="d", storage_key="fp.dxf"), storage)
+    assert r.outputs["symbol_map"]["name"] == "Generic ELV drawing conventions"
+    # The fixture uses SD/MCP/FD, every one of them an ambiguous code, so the
+    # default map maps nothing and says so.
+    assert r.status == "missing_data"
+    assert r.outputs["mapped_insert_count"] == 0
+    notes = " ".join(m.note for m in r.missing)
+    assert "deliberately does not interpret" in notes
+    assert "legend sheet" in notes
+
+
+def test_default_map_counts_a_drawing_that_uses_descriptive_names(storage, tmp_path):
+    d = ezdxf.new("R2010", setup=True)
+    d.header["$INSUNITS"] = 4
+    for b in ("SMOKE-DETECTOR", "MANUAL-CALL-POINT", "DOME-CAMERA"):
+        d.blocks.new(b)
+    d.layers.add("FA-DEVICES")
+    m = d.modelspace()
+    for i in range(4):
+        m.add_blockref("SMOKE-DETECTOR", (i * 1000, 0), dxfattribs={"layer": "FA-DEVICES"})
+    m.add_blockref("MANUAL-CALL-POINT", (0, 500), dxfattribs={"layer": "FA-DEVICES"})
+    m.add_blockref("DOME-CAMERA", (0, 900), dxfattribs={"layer": "CCTV"})
+    s = io.StringIO(); d.write(s)
+    storage.write("descriptive.dxf", s.getvalue().encode())
+
+    r = count_devices(CountInput(document_id="d", storage_key="descriptive.dxf"), storage)
+    assert r.status == "ok"
+    got = {(c["system"], c["device_type"]): c["quantity"] for c in r.outputs["counts"]}
+    assert got == {("fire_alarm", "smoke_detector"): 4,
+                   ("fire_alarm", "manual_call_point"): 1,
+                   ("cctv", "camera"): 1}
 
 
 def test_count_writes_no_file(storage):

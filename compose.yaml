@@ -1,0 +1,21 @@
+# Local run of the craft engines service.
+#
+# Postgres is deliberately not here: which Postgres to use is still open as D-1
+# in docs/ARCHITECTURE.md, and putting one in this file would quietly decide it.
+# The engines are stateless and never connect to the database anyway -- the
+# Next.js app does that, and writes craft_operations itself.
+
+services:
+  engines:
+    build:
+      context: ./engines
+    image: spi-craft-engines:dev
+    ports:
+      - "127.0.0.1:8000:8000"     # loopback only; this service has no auth
+    volumes:
+      # Where tools read uploads and write outputs. In staging and production
+      # this is S3-compatible storage, not a bind mount.
+      - ./out/storage:/data
+    environment:
+      CRAFT_STORAGE_ROOT: /data
+    restart: unless-stopped

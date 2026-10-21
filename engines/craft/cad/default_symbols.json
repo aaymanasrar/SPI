@@ -1,0 +1,259 @@
+{
+  "name": "Generic ELV drawing conventions",
+  "version": "1.0",
+  "source_document": "Generic default. NOT a client drawing standard. Built from descriptive block names that are self-evident in English (a block literally named SMOKE-DETECTOR). Verify against the drawing's own legend sheet before trusting a count.",
+  "rules": [
+    {
+      "block": "(?i)(photo[-_ ]?)?(optical[-_ ]?)?smoke[-_ ]?(det(ector)?)",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "smoke_detector"
+    },
+    {
+      "block": "(?i)heat[-_ ]?(det(ector)?)",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "heat_detector"
+    },
+    {
+      "block": "(?i)multi[-_ ]?(sensor|criteria)[-_ ]?(det(ector)?)?",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "multisensor_detector"
+    },
+    {
+      "block": "(?i)duct[-_ ]?(smoke[-_ ]?)?(det(ector)?)",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "duct_detector"
+    },
+    {
+      "block": "(?i)beam[-_ ]?(det(ector)?)",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "beam_detector"
+    },
+    {
+      "block": "(?i)(manual[-_ ]?)?call[-_ ]?point",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "manual_call_point"
+    },
+    {
+      "block": "(?i)break[-_ ]?glass",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "manual_call_point"
+    },
+    {
+      "block": "(?i)sounder[-_ ]?(strobe|beacon|vad)",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "sounder_strobe"
+    },
+    {
+      "block": "(?i)sounder",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "sounder"
+    },
+    {
+      "block": "(?i)(strobe|beacon|vad)",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "strobe"
+    },
+    {
+      "block": "(?i)fire[-_ ]?alarm[-_ ]?(control[-_ ]?)?panel",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "fire_alarm_panel"
+    },
+    {
+      "block": "(?i)facp",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "fire_alarm_panel"
+    },
+    {
+      "block": "(?i)(remote[-_ ]?)?(annunciator|mimic)([-_ ]?panel)?",
+      "is_regex": true,
+      "system": "fire_alarm",
+      "device_type": "annunciator_panel"
+    },
+    {
+      "block": "(?i)(dome|bullet|fixed|box)[-_ ]?camera",
+      "is_regex": true,
+      "system": "cctv",
+      "device_type": "camera"
+    },
+    {
+      "block": "(?i)camera[-_ ]?(dome|bullet|fixed|box)?",
+      "is_regex": true,
+      "system": "cctv",
+      "device_type": "camera"
+    },
+    {
+      "block": "(?i)(ptz|ptz[-_ ]?camera|camera[-_ ]?ptz)",
+      "is_regex": true,
+      "system": "cctv",
+      "device_type": "ptz_camera"
+    },
+    {
+      "block": "(?i)(nvr|dvr)",
+      "is_regex": true,
+      "system": "cctv",
+      "device_type": "recorder"
+    },
+    {
+      "block": "(?i)card[-_ ]?reader",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "card_reader"
+    },
+    {
+      "block": "(?i)door[-_ ]?contact",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "door_contact"
+    },
+    {
+      "block": "(?i)(rex|request[-_ ]?to[-_ ]?exit|push[-_ ]?to[-_ ]?exit)",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "exit_button"
+    },
+    {
+      "block": "(?i)(mag[-_ ]?lock|magnetic[-_ ]?lock)",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "magnetic_lock"
+    },
+    {
+      "block": "(?i)electric[-_ ]?(strike|lock)",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "electric_strike"
+    },
+    {
+      "block": "(?i)door[-_ ]?controller",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "door_controller"
+    },
+    {
+      "block": "(?i)(emergency[-_ ]?)?(break[-_ ]?glass[-_ ]?)?(door[-_ ]?release)",
+      "is_regex": true,
+      "system": "access_control",
+      "device_type": "emergency_door_release"
+    },
+    {
+      "block": "(?i)(data|network)[-_ ]?outlet",
+      "is_regex": true,
+      "system": "data",
+      "device_type": "data_outlet"
+    },
+    {
+      "block": "(?i)(rj45|(data|network|voice)[-_ ]?faceplate)",
+      "is_regex": true,
+      "system": "data",
+      "device_type": "data_outlet"
+    },
+    {
+      "block": "(?i)(wap|wireless[-_ ]?access[-_ ]?point|access[-_ ]?point)",
+      "is_regex": true,
+      "system": "data",
+      "device_type": "wireless_access_point"
+    },
+    {
+      "block": "(?i)patch[-_ ]?panel",
+      "is_regex": true,
+      "system": "data",
+      "device_type": "patch_panel"
+    },
+    {
+      "block": "(?i)(ceiling|horn|wall)[-_ ]?speaker",
+      "is_regex": true,
+      "system": "public_address",
+      "device_type": "speaker"
+    },
+    {
+      "block": "(?i)speaker",
+      "is_regex": true,
+      "system": "public_address",
+      "device_type": "speaker"
+    },
+    {
+      "block": "(?i)(volume[-_ ]?control|attenuator)",
+      "is_regex": true,
+      "system": "public_address",
+      "device_type": "volume_control"
+    }
+  ],
+  "deliberately_unmapped": [
+    {
+      "code": "FD",
+      "reason": "fire damper, flame detector, or fire door, depending on the discipline. Mapping it wrong moves a device between the mechanical and fire packages."
+    },
+    {
+      "code": "SD",
+      "reason": "smoke detector on a fire alarm layer, smoke damper on a mechanical one, and occasionally sounder. The most common abbreviation and the most commonly wrong."
+    },
+    {
+      "code": "HD",
+      "reason": "heat detector or horn device."
+    },
+    {
+      "code": "MCP",
+      "reason": "manual call point, or main control panel."
+    },
+    {
+      "code": "CP",
+      "reason": "call point, control panel, or ceiling panel."
+    },
+    {
+      "code": "AP",
+      "reason": "access point, or annunciator panel."
+    },
+    {
+      "code": "DC",
+      "reason": "door contact, duct detector, or a DC supply annotation."
+    },
+    {
+      "code": "EL",
+      "reason": "emergency light, or electric lock."
+    },
+    {
+      "code": "PB",
+      "reason": "push button, or pull box."
+    },
+    {
+      "code": "TS",
+      "reason": "tamper switch, or thermostat."
+    },
+    {
+      "code": "SW",
+      "reason": "switch, or sounder (wall)."
+    },
+    {
+      "code": "BG",
+      "reason": "break glass unit, or background (a drawing layer)."
+    },
+    {
+      "code": "VC",
+      "reason": "volume control, or video conferencing outlet."
+    },
+    {
+      "code": "PANEL",
+      "reason": "a distribution board, a fire alarm panel, or an access control panel. 'FIRE-ALARM-PANEL' and 'FACP' are mapped; 'PANEL' alone is not."
+    },
+    {
+      "code": "FACEPLATE",
+      "reason": "a data outlet or a power outlet. Qualified names like 'DATA-FACEPLATE' are mapped."
+    },
+    {
+      "code": "CONTROLLER",
+      "reason": "a door controller, a lighting controller, or a BMS controller."
+    }
+  ]
+}

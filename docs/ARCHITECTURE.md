@@ -724,6 +724,11 @@ Word and AutoCAD keep their jobs.
 ### 18.1 Position
 
 A separate Python process (`engines/`), exposed over HTTP and called from `src/modules/craft/`.
+`engines/Dockerfile` builds it, and `compose.yaml` runs it on loopback; the image carries
+LibreOffice because `word.to_pdf` shells out to it, plus Carlito and Liberation so generated PDFs
+keep the metrics the templates were laid out for.
+The service has **no authentication of its own** — authorisation happens in the server action
+before the call — so it must never be bound to a public address.
 Separate because the mature libraries for these formats are Python (openpyxl, python-docx, ezdxf,
 pdfplumber) and because a CPU-bound parse must not sit in a Next.js request path.
 
@@ -791,6 +796,19 @@ signed; the transmittal does not, because it makes no engineering claim.
 `cad.count_devices` takes a `SymbolMap` as input. No mapping is hard-coded, because a block named
 `FD` is a smoke detector on one job and a fire damper on another. A map must declare
 `source_document`; one with no stated origin cannot be audited later and is rejected.
+
+A generic default ships as data in `engines/craft/cad/default_symbols.json` and is used when no map
+is supplied. It matches **descriptive** block names only — a block literally called
+`SMOKE-DETECTOR`, `CARD-READER`, `DOME-CAMERA`. It deliberately does **not** interpret short codes:
+`SD`, `FD`, `MCP`, `PANEL` and thirteen others are listed in `deliberately_unmapped` with the
+reason, and `cad.count_devices` puts that reason into the `missing_data` note, so the gap reads as a
+decision rather than an oversight.
+
+The reasoning: a *wrong* mapping is worse than a missing one. A missing one produces
+`missing_data`, which someone acts on. A wrong one produces a confident count that flows into a BOQ
+and is never looked at again. `SD` is smoke detector on a fire alarm layer and smoke damper on a
+mechanical one; guessing moves a device between packages. The default is a starting point, not a
+client standard — request #4 in `docs/data-requests/craft-engines.md` is still open.
 
 ### 18.6 Authority
 

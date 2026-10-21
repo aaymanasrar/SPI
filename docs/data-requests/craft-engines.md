@@ -22,11 +22,11 @@ own .docx in storage with `{{placeholders}}` typed into it and point
 | 1 | SmartPage **compliance sheet** .docx template | `word.compliance_sheet` | Closed - clean default built |
 | 2 | SmartPage **submittal cover** .docx template | `word.fill_template` | Closed - clean default built |
 | 3 | SmartPage **transmittal** .docx template | `word.fill_template` | Closed - clean default built |
-| 4 | **Symbol / block mapping** per client drawing standard | `cad.count_devices` | Not supplied |
+| 4 | **Symbol / block mapping** per client drawing standard | better `cad.count_devices` coverage | Generic default built; client standard still wanted |
 | 5 | A representative client **BOQ workbook** | `grid.read_client_boq` header synonyms | Not supplied |
 | 6 | A representative **DXF floor plan** | every `cad.*` tool | Not supplied |
 | 7 | A **licence decision** on two LGPL packages | nothing | Closed - signed off by delegation |
-| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Installed locally; still needed in the deploy image |
+| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Closed - installed locally and in engines/Dockerfile |
 
 ## Notes on each
 
@@ -36,11 +36,22 @@ templating language. What it does need is the real document, because a complianc
 sheet's column order and the consultant's expected wording are SmartPage's
 convention, not something to invent.
 
-**4 Symbol mapping.** Stored as data (JSON or a table), never as code — a mapping
-hard-coded in `symbols.py` would be an invented engineering rule. Shape:
-`{ block_name | layer_pattern → device_type, system }`. One mapping per client
-drawing standard, because a block called `FD` means a smoke detector on one job
-and a fire damper on another.
+**4 Symbol mapping — partly closed.** A generic default now ships as data in
+`engines/craft/cad/default_symbols.json` and is used when no map is supplied:
+31 rules matching **descriptive** block names (`SMOKE-DETECTOR`,
+`CARD-READER`, `DOME-CAMERA`), and 16 short codes listed as
+`deliberately_unmapped` with the reason, which `cad.count_devices` repeats in
+the `missing_data` note.
+
+So a drawing that names its blocks in words counts straight away. A drawing
+that uses codes still stops — on purpose. Guessing `SD` wrong moves a device
+between the fire alarm and mechanical packages, and a wrong count is worse than
+no count because it looks finished.
+
+Still wanted: **one map per client drawing standard**, which is the only thing
+that makes `SD`, `FD` and `MCP` countable. Read it off the drawing's legend
+sheet. It stays data, never code — a mapping hard-coded in `symbols.py` would be
+an invented engineering rule.
 
 **5 Client BOQ.** `grid/reader.py` recognises header synonyms from a list that is
 currently a reasonable guess (`qty`, `qnty`, `uom`, `mlfb`, …). One real client
