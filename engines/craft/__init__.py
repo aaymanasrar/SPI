@@ -6,6 +6,7 @@ from .core import (TOOL_REGISTRY, ENGINE_VERSION, ToolResult, MissingData,
                    InvalidInput, LocalStorage, tool_schemas)
 from . import grid  # noqa: F401  (registers grid.* tools)
 from . import pdf   # noqa: F401  (registers pdf.* tools)
+from . import cad   # noqa: F401  (registers cad.* tools)
 
 __all__ = ["TOOL_REGISTRY", "ENGINE_VERSION", "ToolResult", "MissingData",
            "InvalidInput", "LocalStorage", "tool_schemas"]
