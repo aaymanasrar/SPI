@@ -26,7 +26,7 @@ own .docx in storage with `{{placeholders}}` typed into it and point
 | 5 | A representative client **BOQ workbook** | `grid.read_client_boq` header synonyms | Not supplied |
 | 6 | A representative **DXF floor plan** | every `cad.*` tool | Not supplied |
 | 7 | A **licence decision** on two LGPL packages | nothing | Closed - signed off by delegation |
-| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Not installed here |
+| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Installed locally; still needed in the deploy image |
 
 ## Notes on each
 
@@ -97,38 +97,22 @@ by the licence owner"** on every run. Three ways out:
 
 Until you say, option 1's warning stays on screen. I have not changed your policy.
 
-## 8 LibreOffice is not installed on this machine
+## 8 LibreOffice
 
-`word.to_pdf` converts .docx to PDF by running LibreOffice headless as a
-separate process (MPL-2.0, which your policy allows on exactly that condition).
-It is not installed here, so **that conversion path has never actually been
-run**. Its tests cover the refusal and the `SOFFICE_PATH` override; the test
-that performs a real conversion is skipped, and the run reports it as skipped
-rather than passing.
+Installed locally on 2026-10-21 (`brew install --cask libreoffice`), version:
 
-The tool does not fall back to another renderer. A submittal that quietly loses
-its letterhead because a fallback ignored the template styles is worse than a
-clear refusal naming the missing program.
+```
+LibreOffice 26.8.0.3 bce0998afefdbc355585ca324285661a2170ba77
+```
 
-To close it: `brew install --cask libreoffice` on macOS, or
-`apt-get install libreoffice-writer` in the container the engines will run in,
-or set `SOFFICE_PATH`. I have not installed it: it is a ~700 MB system-wide
-install, and that is your call.
+`word.to_pdf` has now actually run: the full suite is **105 passed, 0 skipped**,
+and the test that performs a real conversion is among them. A cover and a
+compliance statement convert in about 1.1 s each.
 
-## The default templates' field sets
+`find_soffice()` resolves `/opt/homebrew/bin/soffice`, and checks `SOFFICE_PATH`
+first so a deploy image can point somewhere else.
 
-`word.fill_template` writes no file while any placeholder is unfilled, so each
-field set is kept to what a document of that kind cannot go out without.
-`templates.placeholders(kind)` returns these at runtime, and a test asserts the
-list cannot drift from the .docx.
-
-| Template | Required values |
-|---|---|
-| `transmittal` | to, project_name, project_number, date, revision, purpose, contents, issued_by |
-| `submittal_cover` | project_name, project_number, package, spec_section, date, revision, manufacturer, product_model, prepared_by |
-| `compliance` | project_name, project_number, product_model, date, revision, spec_source |
-
-The submittal cover and the compliance statement carry a one-line note that the
-document is a generated proposal and not a submittal until signed. The
-transmittal does not: it makes no engineering claim, so the caveat would be
-noise.
+**Still outstanding:** whatever image the engines are deployed into needs it too
+(`apt-get install libreoffice-writer`, or set `SOFFICE_PATH`). A machine without
+it gets a clear refusal naming the program, not a crash and not a silent
+fallback to a renderer that would drop the template styles.
