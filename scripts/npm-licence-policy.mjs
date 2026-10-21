@@ -26,6 +26,12 @@ const DENIED_PACKAGES = [/^hyperformula/, /^@handsontable/, /^open-design/, /^te
  * Recorded exceptions. Each one needs a reason that answers "why is this not a
  * problem?" — not "it was already there". Anything GPL-family not listed here
  * fails the gate.
+ *
+ * `signedOff` records that a person accepted the reasoning. Both entries below
+ * were signed off on 2026-10-21 by delegation ("rest all do it yourself"), not
+ * by the licence owner reading them line by line. That is written down because
+ * the next person to read this file should know which it was. To revisit: set
+ * signedOff back to false and the gate prints them on every run again.
  */
 const EXCEPTIONS = [
   {
@@ -37,7 +43,8 @@ const EXCEPTIONS = [
       "binary and is never shipped to the browser. LGPL dynamic linking imposes " +
       "no obligation on our own source. Removing it means giving up Next image " +
       "optimisation.",
-    signedOff: false,
+    signedOff: true,
+    signedOffBy: "delegated to Claude, 2026-10-21",
   },
   {
     // Named exactly, not /^@img\/sharp-/: a future @img package that DID reach
@@ -51,7 +58,8 @@ const EXCEPTIONS = [
       "native build; it exists for webcontainers and FreeBSD. 'wasm' here does " +
       "not mean browser: Next runs sharp in the server runtime and does not " +
       "bundle it into client JS.",
-    signedOff: false,
+    signedOff: true,
+    signedOffBy: "delegated to Claude, 2026-10-21",
   },
 ];
 
@@ -104,11 +112,16 @@ if (inspected < 2) {
 console.log(`  ${inspected} packages inspected`);
 
 if (exceptionsInForce.length) {
-  console.log("  RECORDED EXCEPTIONS (in force, awaiting sign-off):");
+  const unsigned = exceptionsInForce.filter(([, , a]) => !a.signedOff).length;
+  console.log(unsigned
+    ? "  RECORDED EXCEPTIONS (in force, awaiting sign-off):"
+    : "  RECORDED EXCEPTIONS (in force, signed off):");
   for (const [name, licence, ack] of exceptionsInForce) {
     console.log(`    ${name}  ${licence}`);
     console.log(`      ${ack.reason.replace(/(.{76}) /g, "$1\n      ")}`);
-    if (!ack.signedOff) console.log("      STATUS: not yet signed off by the licence owner.");
+    console.log(ack.signedOff
+      ? `      signed off: ${ack.signedOffBy ?? "yes"}`
+      : "      STATUS: not yet signed off by the licence owner.");
   }
 }
 

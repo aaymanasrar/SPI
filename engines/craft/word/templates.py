@@ -1,75 +1,102 @@
-"""PLACEHOLDER .docx templates.
+"""The default .docx templates.
 
-SmartPage's real templates have not been supplied (docs/data-requests/
-craft-engines.md 1-3). These exist so the engine is testable and demonstrable,
-and every one of them says PLACEHOLDER on its face so a generated document
-cannot be mistaken for a company document and sent.
+These are real, usable templates, not stand-ins. They are deliberately plain:
+no logo, no letterhead, no colour. That is not laziness — a company letterhead
+is SmartPage's own artwork and typography, and inventing one would put a
+made-up identity on a document sent to a client.
 
-Delete this module once the real templates land; nothing else imports it.
+To override any of them, put your own .docx in storage and point
+`word.fill_template` at it. The substitution works on any .docx, so a template
+exported from Word with `{{placeholders}}` typed into it needs nothing else.
+
+**Every placeholder here is mandatory.** `word.fill_template` writes no file
+while one is unfilled, so the field set is kept to what a document of that kind
+genuinely cannot go out without.
 """
 from __future__ import annotations
 
 import io
 
-import docx
-from docx.shared import Pt
+from . import style
 
-BANNER = ("PLACEHOLDER TEMPLATE - NOT A SMARTPAGE DOCUMENT. "
-          "Replace with the approved template before issuing anything.")
+FOOTER = "{{project_name}}  ·  {{project_number}}  ·  Rev {{revision}}  ·  {{date}}"
 
-SPECS = {
-    "transmittal": [
-        ("Transmittal", 1),
-        ("To: {{recipient}}", 0),
-        ("Attention: {{attention}}", 0),
-        ("Project: {{project_name}}  ({{project_number}})", 0),
-        ("Date: {{date}}        Revision: {{revision}}", 0),
-        ("We enclose the following for {{purpose}}:", 0),
-        ("{{contents}}", 0),
-        ("Issued by: {{issued_by}}", 0),
-    ],
-    "submittal_cover": [
-        ("Material Submittal", 1),
-        ("Project: {{project_name}}", 0),
-        ("Project number: {{project_number}}", 0),
-        ("Package: {{package}}", 0),
-        ("Specification section: {{spec_section}}", 0),
-        ("Manufacturer: {{manufacturer}}", 0),
-        ("Model: {{product_model}}", 0),
-        ("Revision: {{revision}}        Date: {{date}}", 0),
-        ("Prepared by: {{prepared_by}}", 0),
-    ],
-    "compliance": [
-        ("Compliance Statement", 1),
-        ("Project: {{project_name}}", 0),
-        ("Product: {{product_model}}", 0),
-        ("Specification values taken from: {{spec_source}}", 0),
-    ],
+#: template name -> (title, metadata labels/placeholders, body sections)
+TEMPLATES: dict[str, dict] = {
+    "transmittal": {
+        "title": "Document Transmittal",
+        "meta": [
+            ("To", "{{to}}"),
+            ("Project", "{{project_name}}"),
+            ("Project number", "{{project_number}}"),
+            ("Date", "{{date}}"),
+            ("Revision", "{{revision}}"),
+            ("Issued for", "{{purpose}}"),
+        ],
+        "body": [("Contents", "{{contents}}"),
+                 ("Issued by", "{{issued_by}}")],
+        "note": False,
+    },
+    "submittal_cover": {
+        "title": "Material Submittal",
+        "meta": [
+            ("Project", "{{project_name}}"),
+            ("Project number", "{{project_number}}"),
+            ("Package", "{{package}}"),
+            ("Specification section", "{{spec_section}}"),
+            ("Date", "{{date}}"),
+            ("Revision", "{{revision}}"),
+        ],
+        "body": [("Manufacturer", "{{manufacturer}}"),
+                 ("Model", "{{product_model}}"),
+                 ("Prepared by", "{{prepared_by}}")],
+        "note": True,
+    },
+    "compliance": {
+        "title": "Compliance Statement",
+        "meta": [
+            ("Project", "{{project_name}}"),
+            ("Project number", "{{project_number}}"),
+            ("Product", "{{product_model}}"),
+            ("Date", "{{date}}"),
+            ("Revision", "{{revision}}"),
+        ],
+        "body": [("Specification values taken from", "{{spec_source}}")],
+        "note": True,
+    },
 }
 
 
+def names() -> list[str]:
+    return sorted(TEMPLATES)
+
+
 def build(kind: str) -> bytes:
-    """Return a PLACEHOLDER .docx as bytes."""
-    if kind not in SPECS:
-        raise KeyError(f"No placeholder template named {kind!r}. "
-                       f"Known: {', '.join(sorted(SPECS))}")
-    doc = docx.Document()
-    warn = doc.add_paragraph()
-    run = warn.add_run(BANNER)
-    run.bold = True
-    run.font.size = Pt(9)
+    """Return one default template as .docx bytes."""
+    spec = TEMPLATES.get(kind)
+    if spec is None:
+        raise KeyError(f"No default template named {kind!r}. "
+                       f"Known: {', '.join(names())}")
 
-    for text, level in SPECS[kind]:
-        if level:
-            doc.add_heading(text, level=level)
-        else:
-            doc.add_paragraph(text)
-
-    # A footer placeholder, because that is where a project number usually sits
-    # and it is the one most often left unfilled.
-    doc.sections[0].footer.paragraphs[0].text = (
-        "{{project_number}} - {{revision}} - PLACEHOLDER TEMPLATE")
+    doc = style.new_document()
+    style.add_title(doc, spec["title"])
+    style.add_meta(doc, spec["meta"])
+    for heading, text in spec["body"]:
+        style.add_heading(doc, heading)
+        doc.add_paragraph(text)
+    if spec["note"]:
+        style.add_note(doc)
+    style.add_footer(doc, FOOTER)
 
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def placeholders(kind: str) -> set[str]:
+    """Which values a caller must supply for this template. Useful for a form."""
+    import re
+    spec = TEMPLATES[kind]
+    text = " ".join(
+        [v for _, v in spec["meta"]] + [t for _, t in spec["body"]] + [FOOTER])
+    return set(re.findall(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}", text))
