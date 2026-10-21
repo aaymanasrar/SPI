@@ -23,7 +23,13 @@ DENY_PKG='pymupdf.*|fitz.*|hyperformula.*|open-design.*'
 
 echo "== Python (engines/.venv) =="
 if [ -x engines/.venv/bin/pip-licenses ]; then
-  out=$(engines/.venv/bin/pip-licenses --format=plain 2>/dev/null | tail -n +2 | sed '/^[[:space:]]*$/d')
+  # The engines package itself is installed editable into its own venv. It is
+  # not a dependency of itself and declares no licence, so it must not be graded
+  # by its own gate -- the npm half skips the project package for the same
+  # reason.
+  out=$(engines/.venv/bin/pip-licenses --format=plain \
+          --ignore-packages spi-craft-engines 2>/dev/null \
+        | tail -n +2 | sed '/^[[:space:]]*$/d')
   n=$(printf '%s\n' "$out" | wc -l | tr -d ' ')
   if [ "$n" -lt 2 ]; then
     # A gate that inspects nothing and passes is worse than no gate.

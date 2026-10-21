@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 ENGINE_VERSION = "engines@0.1.0"
 
@@ -41,5 +41,18 @@ class ToolResult(BaseModel):
     provenance: list[Provenance] = Field(default_factory=list)
     missing: list[MissingItem] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    # Set iff status == 'error'. Migration 0023 constrains
+    # (status = 'error') = (error is not null) on craft_operations, so a failure
+    # with no message cannot be recorded at all.
+    error: str | None = None
     engine_version: str = ENGINE_VERSION
     duration_ms: int | None = None
+
+    @model_validator(mode="after")
+    def _error_iff_failed(self) -> "ToolResult":
+        if (self.status == "error") != (self.error is not None):
+            raise ValueError(
+                "status='error' and a non-null `error` must agree: the database "
+                "constraint on craft_operations rejects anything else, which "
+                "would lose the record of the failure itself.")
+        return self

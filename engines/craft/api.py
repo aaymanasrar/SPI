@@ -74,8 +74,11 @@ def run_tool(name: str, call: ToolCall) -> dict:
     except InvalidInput as e:
         result = ToolResult(tool=name, status="invalid_input", warnings=[str(e)])
     except Exception as e:                      # noqa: BLE001 — surfaced, not swallowed
+        # `error` is set, not just `warnings`: migration 0023 constrains
+        # (status = 'error') = (error is not null), so a null here would make the
+        # craft_operations insert fail and lose the record of the failure.
         result = ToolResult(tool=name, status="error",
-                            warnings=[f"{type(e).__name__}: {e}"])
+                            error=f"{type(e).__name__}: {e}")
 
     result.operation_id = call.operation_id
     if result.duration_ms is None:

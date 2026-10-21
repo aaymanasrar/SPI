@@ -84,7 +84,12 @@ export async function runCraftToolAction(
         missing: result.missing,
         warnings: result.warnings,
         status: result.status,
-        error: result.status === "error" ? result.warnings.join("; ") || "Engine error" : null,
+        // Prefer the engine's own message: ToolUnavailable sets `error` and no
+        // warnings, and it is the one that names the missing program.
+        error:
+          result.status === "error"
+            ? result.error || result.warnings.join("; ") || "Engine error"
+            : null,
         durationMs: result.duration_ms,
         engineVersion: result.engine_version,
       });

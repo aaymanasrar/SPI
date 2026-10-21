@@ -30,6 +30,8 @@ export type CraftResult = {
   provenance: { value_ref: string; source: string }[];
   missing: { field: string; record: string; note: string | null }[];
   warnings: string[];
+  /** Set iff status === 'error'. */
+  error?: string | null;
   engine_version: string;
   duration_ms: number | null;
 };
