@@ -759,7 +759,7 @@ finished.
 | CAD | `cad.count_devices` | `drawing_objects` rows, `source='imported'`, `review_status='pending'` |
 | CAD | `cad.extract_rooms` | nothing — outlines, labels, areas |
 | CAD | `cad.markup` | a **new** DXF with notes on an `SPI_MARKUP` layer |
-| Word | `word.fill_template` | .docx from a template |
+| Word | `word.fill_template` | .docx from a default or supplied template |
 | Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
 | Word | `word.to_pdf` | .pdf, via LibreOffice headless |
 
@@ -768,20 +768,38 @@ finished.
 spacing value exists anywhere in this package. Routing is **D-7**: measuring a straight line between
 two symbols is the fabrication the previous build shipped.
 
-### 18.4 Symbol mapping is data
+### 18.4 Word output has one default look
+
+`craft/word/style.py` holds the shared document style — A4, 2 cm margins, one typeface, a title, a
+borderless label/value block, then content — and `craft/word/templates.py` holds three default
+templates built on it: transmittal, submittal cover and compliance statement.
+`word.compliance_sheet` uses the same style, so every Word output matches.
+
+No logo, no letterhead, no company name. That artwork is SmartPage's, and a generated one would go
+out on a document sent to a client; a test asserts no identity is invented. To override a template,
+put a .docx in storage with `{{placeholders}}` typed into it and point `word.fill_template` at it —
+the substitution works on any .docx.
+
+Every placeholder is mandatory, because an unfilled one blocks the write. Field sets are therefore
+kept to what a document of that kind cannot go out without, and
+`templates.placeholders(kind)` returns the set at runtime for a form to build from. The submittal
+cover and the compliance statement state that they are generated proposals and not submittals until
+signed; the transmittal does not, because it makes no engineering claim.
+
+### 18.5 Symbol mapping is data
 
 `cad.count_devices` takes a `SymbolMap` as input. No mapping is hard-coded, because a block named
 `FD` is a smoke detector on one job and a fire damper on another. A map must declare
 `source_document`; one with no stated origin cannot be audited later and is rejected.
 
-### 18.5 Authority
+### 18.6 Authority
 
 Every tool returns a proposal. `TOOL_POLICY` in `src/modules/craft/tools.ts` sets `aiMayCommit:
 false` for all of them (§4.1 rule 1 — `ai/` may not write to authoritative tables). The AI may
 assemble a submittal pack; a person issues it. Counted devices land in `drawing_objects` as
 `pending` and reach `design_devices` only through the existing `building_model.review` flow.
 
-### 18.6 Licensing
+### 18.7 Licensing
 
 Allowed: MIT, BSD, Apache-2.0, ISC, PSF, MPL-2.0 (separate process only). Forbidden: AGPL, GPL
 shipped to the browser, HyperFormula, the ODA SDK.
@@ -796,7 +814,7 @@ upstream. LibreOffice is MPL-2.0 and is invoked as a separate process, never lin
 run. The npm half judges each package (`scripts/npm-licence-policy.mjs`), because a flat `grep GPL`
 can only express "no GPL anywhere", which would reject Next.js itself. See **D-8**.
 
-### 18.7 Record
+### 18.8 Record
 
 Every run inserts one `craft_operations` row (migration 0023, append-only): engine, tool, actor,
 mode, inputs, outputs, provenance, missing items, warnings, status, duration and engine version.

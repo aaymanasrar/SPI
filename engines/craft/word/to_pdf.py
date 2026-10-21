@@ -69,11 +69,18 @@ def to_pdf(data: ToPdfInput, storage: Storage | None = None) -> ToolResult:
         src.write_bytes(storage.read(data.storage_key))
         # -env:UserInstallation isolates the profile: two concurrent conversions
         # sharing the default profile make the second one exit silently.
-        proc = subprocess.run(
-            [soffice, "--headless", "--norestore",
-             f"-env:UserInstallation=file://{tmp}/profile",
-             "--convert-to", "pdf", "--outdir", tmp, str(src)],
-            capture_output=True, timeout=data.timeout_seconds, check=False)
+        try:
+            proc = subprocess.run(
+                [soffice, "--headless", "--norestore",
+                 f"-env:UserInstallation=file://{tmp}/profile",
+                 "--convert-to", "pdf", "--outdir", tmp, str(src)],
+                capture_output=True, timeout=data.timeout_seconds, check=False)
+        except subprocess.TimeoutExpired as e:
+            raise ToolUnavailable(
+                f"LibreOffice did not finish converting {data.storage_key} within "
+                f"{data.timeout_seconds}s and was stopped. A large document may "
+                "need a longer timeout_seconds; a hung one usually means a stale "
+                "profile or another instance holding a lock.") from e
         out = Path(tmp) / "input.pdf"
         if not out.exists():
             raise ToolUnavailable(
