@@ -13,8 +13,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ValidationError
 
 from .core import (ENGINE_VERSION, InvalidInput, LocalStorage, MissingData,
-                   TOOL_REGISTRY, ToolResult, tool_schemas)
-from . import grid  # noqa: F401  (registration side-effect)
+                   TOOL_REGISTRY, ToolResult, ToolUnavailable, tool_schemas)
+# Importing craft registers every engine's tools; importing one engine would
+# serve a registry missing the others.
+from . import grid, pdf, cad, word  # noqa: F401  (registration side-effect)
 
 app = FastAPI(title="SPI Craft Engines", version=ENGINE_VERSION)
 
@@ -66,6 +68,9 @@ def run_tool(name: str, call: ToolCall) -> dict:
                             missing=[{"field": i.get("field", "?"),
                                       "record": i.get("record", "?"),
                                       "note": i.get("note")} for i in e.items])
+    except ToolUnavailable as e:
+        # The request was valid; this machine is missing a program. Say which.
+        result = ToolResult(tool=name, status="error", error=str(e))
     except InvalidInput as e:
         result = ToolResult(tool=name, status="invalid_input", warnings=[str(e)])
     except Exception as e:                      # noqa: BLE001 — surfaced, not swallowed

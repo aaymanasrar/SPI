@@ -100,6 +100,32 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "word.fill_template": {
+    name: "word.fill_template",
+    engine: "word",
+    previewPermission: "craft.preview",
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "word.compliance_sheet": {
+    name: "word.compliance_sheet",
+    engine: "word",
+    previewPermission: "craft.preview",
+    // A compliance statement is a claim made to a client. The engine can only
+    // assemble it from captured values; an engineer signs it.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "word.to_pdf": {
+    name: "word.to_pdf",
+    engine: "word",
+    previewPermission: "craft.preview",
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   // cad.place_devices and cad.measure_route are deliberately absent. They are
   // registered in the engine as implemented=false and raise NotImplementedError;
   // listing them here would advertise them to the orchestrator as callable.

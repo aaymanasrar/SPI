@@ -394,6 +394,9 @@ that no client-role API response contains cost or margin keys.
   total expanded size and path traversal.
 - Heavy parsing happens in workers, never in the request path.
 
+The **craft engines** (§18) are the read/write half of this: they consume originals from object
+storage and emit new objects, never mutating what was uploaded.
+
 **Carried forward from earlier work:** PDF text extraction, table extraction and page rendering
 for drawings that carry no extractable text were built and proven against a real Aramco package.
 That work is applicable at Phase 5–6 and should be reused rather than rediscovered. It is *not*
@@ -662,6 +665,14 @@ quantity. Whether MVP takes manual lengths, computes from a route model, or both
 engineering decision. This is exactly the value the previous build fabricated by measuring lines
 on a drawing, so it warrants an explicit answer.
 
+**D-8 — LGPL in the dependency tree.** *Blocks: nothing; the gate passes with the exception
+recorded.* The allowed set is MIT, BSD, Apache-2.0, ISC, PSF and MPL-2.0 (separate process only);
+AGPL and GPL-in-the-browser are forbidden. LGPL is on neither list. Two packages are LGPL-3.0
+(`@img/sharp-libvips-*` and `@img/sharp-wasm32`), both server-side libvips arriving via
+`next` → `sharp`. They are recorded as exceptions in `scripts/npm-licence-policy.mjs` with
+`signedOff: false`, so every run of the gate prints them. Options and consequences are set out in
+`docs/data-requests/craft-engines.md` §7.
+
 ---
 
 ## 17. Appendix A status
@@ -701,3 +712,93 @@ becomes a new version (§12).
 without any of this.** Everything from the design modules onward produces an empty shell until the
 corresponding data arrives. Collecting it is organizational work that is slower than the coding,
 so it should start immediately and in parallel — it is the real critical path, not the software.
+
+---
+
+## 18. Craft engines
+
+The platform can reason about rules and compute numbers, but engineers work in .xlsx, .docx, .dxf
+and .pdf. The craft engines read and write those files. They are headless tools, not editors: Excel,
+Word and AutoCAD keep their jobs.
+
+### 18.1 Position
+
+A separate Python process (`engines/`), exposed over HTTP and called from `src/modules/craft/`.
+Separate because the mature libraries for these formats are Python (openpyxl, python-docx, ezdxf,
+pdfplumber) and because a CPU-bound parse must not sit in a Next.js request path.
+
+`src/modules/craft/actions.ts` makes the HTTP call **outside** the transaction, then opens one to
+write `craft_operations`, the output `documents` row and the audit entry together. The postgres.js
+pool is `max: 10`; a slow parse holding a pooled connection would starve the application.
+
+### 18.2 The rule that shapes every tool
+
+**No tool invents an engineering value.** Where a value is absent, the tool returns
+`status='missing_data'` with an itemised list naming the record and field, and — when the output
+is a document — **writes no file at all**. A half-finished document circulates as if it were
+finished.
+
+| Situation | What happens |
+|---|---|
+| Template placeholder with no value | No .docx written; the key is itemised |
+| Spec clause with no captured value | Not "Comply"; no sheet written |
+| Block insert not in the symbol map | Whole count is `missing_data`; partial tallies still returned |
+| DXF with `$INSUNITS = 0` | Outlines returned, areas refused |
+| PDF page with no text layer | Reported as needing OCR, not as empty text |
+| BOQ line with no approved price | `missing_data`, not zero |
+
+### 18.3 Tools
+
+| Engine | Tool | Writes |
+|---|---|---|
+| Grid | `grid.write_boq` | .xlsx, value **and** live formula per cell, hidden provenance sheet |
+| Grid | `grid.read_client_boq` | nothing — returns proposals |
+| PDF | `pdf.extract` | nothing — text, tables, vector paths |
+| PDF | `pdf.pack` | merged, stamped submittal pack |
+| CAD | `cad.read_dxf` | nothing — layer/block/insert inventory |
+| CAD | `cad.count_devices` | `drawing_objects` rows, `source='imported'`, `review_status='pending'` |
+| CAD | `cad.extract_rooms` | nothing — outlines, labels, areas |
+| CAD | `cad.markup` | a **new** DXF with notes on an `SPI_MARKUP` layer |
+| Word | `word.fill_template` | .docx from a template |
+| Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
+| Word | `word.to_pdf` | .pdf, via LibreOffice headless |
+
+`cad.place_devices` and `cad.measure_route` are registered as `implemented=false` and raise
+`NotImplementedError`. Placement needs a spacing rule with a citation from the rules engine, and no
+spacing value exists anywhere in this package. Routing is **D-7**: measuring a straight line between
+two symbols is the fabrication the previous build shipped.
+
+### 18.4 Symbol mapping is data
+
+`cad.count_devices` takes a `SymbolMap` as input. No mapping is hard-coded, because a block named
+`FD` is a smoke detector on one job and a fire damper on another. A map must declare
+`source_document`; one with no stated origin cannot be audited later and is rejected.
+
+### 18.5 Authority
+
+Every tool returns a proposal. `TOOL_POLICY` in `src/modules/craft/tools.ts` sets `aiMayCommit:
+false` for all of them (§4.1 rule 1 — `ai/` may not write to authoritative tables). The AI may
+assemble a submittal pack; a person issues it. Counted devices land in `drawing_objects` as
+`pending` and reach `design_devices` only through the existing `building_model.review` flow.
+
+### 18.6 Licensing
+
+Allowed: MIT, BSD, Apache-2.0, ISC, PSF, MPL-2.0 (separate process only). Forbidden: AGPL, GPL
+shipped to the browser, HyperFormula, the ODA SDK.
+
+Consequences actually taken: **no PyMuPDF** (AGPL) — `pdfplumber` and `pypdf` instead; **no
+docxtpl** (LGPL-2.1) — `craft/word/placeholders.py` does the run merging with `python-docx`, which
+is why that module exists; **no formula evaluator** — GridCraft writes the formula text and lets
+Excel calculate; **no DWG reader** — the usual one is the ODA SDK, so DWG must be converted
+upstream. LibreOffice is MPL-2.0 and is invoked as a separate process, never linked.
+
+`scripts/check-licenses` gates both halves of the tree and fails rather than skips when it cannot
+run. The npm half judges each package (`scripts/npm-licence-policy.mjs`), because a flat `grep GPL`
+can only express "no GPL anywhere", which would reject Next.js itself. See **D-8**.
+
+### 18.7 Record
+
+Every run inserts one `craft_operations` row (migration 0023, append-only): engine, tool, actor,
+mode, inputs, outputs, provenance, missing items, warnings, status, duration and engine version.
+Output `documents` rows carry `source_operation_id`, so any generated file can be traced to the run
+that made it and the inputs it read.

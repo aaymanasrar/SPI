@@ -29,3 +29,12 @@ class InvalidInput(CraftError):
 
 class LicenseViolation(CraftError):
     """A code path requires a dependency outside the allowed licence set."""
+
+
+class ToolUnavailable(CraftError):
+    """A required external program is not installed on this machine.
+
+    Distinct from InvalidInput: the request was fine, the environment is not.
+    The message must name the program and how to install it, because the person
+    reading it is usually not the person who built the container.
+    """
