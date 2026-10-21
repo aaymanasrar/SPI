@@ -26,7 +26,7 @@ own .docx in storage with `{{placeholders}}` typed into it and point
 | 5 | A representative client **BOQ workbook** | `grid.read_client_boq` header synonyms | Not supplied |
 | 6 | A representative **DXF floor plan** | every `cad.*` tool | Not supplied |
 | 7 | A **licence decision** on two LGPL packages | nothing | Closed - signed off by delegation |
-| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Closed - installed locally and in engines/Dockerfile |
+| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Local: done. Image: written, not yet built |
 
 ## Notes on each
 
@@ -123,7 +123,51 @@ compliance statement convert in about 1.1 s each.
 `find_soffice()` resolves `/opt/homebrew/bin/soffice`, and checks `SOFFICE_PATH`
 first so a deploy image can point somewhere else.
 
-**Still outstanding:** whatever image the engines are deployed into needs it too
-(`apt-get install libreoffice-writer`, or set `SOFFICE_PATH`). A machine without
-it gets a clear refusal naming the program, not a crash and not a silent
-fallback to a renderer that would drop the template styles.
+### The deploy image
+
+`engines/Dockerfile` installs it (`libreoffice-writer-nogui`), plus
+`fonts-crosextra-carlito` and `fonts-liberation`. Carlito is metric-compatible
+with Calibri, which `craft/word/style.py` asks for; without it LibreOffice
+substitutes a font with different metrics and every generated PDF reflows.
+
+**The image has not been built, and could not be on this machine.** Docker is
+not installed here (that is **D-1**), so Colima was installed to build it. Its
+VM image download failed twice:
+
+```
+downloading disk image ...
+error downloading 'ubuntu-24.04-minimal-cloudimg-arm64-docker.raw.gz':
+read tcp ...->185.199.111.133:443: read: connection reset by peer
+```
+
+41 minutes, connection reset. The asset is served from a GitHub pre-signed URL
+valid for about an hour, and this connection moves roughly 0.1 MB/s — the URL
+expires before the image lands. Even if the VM came up, the build then has to
+pull `python:3.12-slim` and apt-download LibreOffice inside it, which is several
+hundred MB more.
+
+`colima`, `docker` and `docker-compose` are installed and will work on a faster
+connection; nothing needs reinstalling. A partial download sits in
+`~/Library/Caches/colima` and can be deleted.
+
+What has been verified, without building:
+
+- All four apt packages exist in bookworm: `libreoffice-writer-nogui`
+  (4:7.4.7-1+deb12u14), `libreoffice-writer`, `fonts-crosextra-carlito`
+  (20220224-1), `fonts-liberation` (1:1.07.4-11).
+- `/usr/bin/soffice`, which `SOFFICE_PATH` points at, is shipped by
+  `libreoffice-common` — not by the `-nogui` package itself. It is a **hard**
+  dependency of both `libreoffice-writer-nogui` and `libreoffice-core-nogui`, so
+  `--no-install-recommends` does not drop it.
+
+So treat the Dockerfile as reviewed but unproven. The command that proves it:
+
+```
+docker build -t spi-craft-engines:dev engines/
+docker run --rm spi-craft-engines:dev python -c \
+  "from craft.word import find_soffice; print(find_soffice())"
+```
+
+A machine without LibreOffice gets a clear refusal naming the program — not a
+crash, and not a silent fallback to a renderer that would drop the template
+styles.
