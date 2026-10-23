@@ -168,13 +168,33 @@ def run(cfg: dict) -> int:
     for c in counted.outputs["counts"]:
         got[c["device_type"]] = got.get(c["device_type"], 0.0) + c["quantity"]
 
+    # Four classes, reported apart. A net quantity difference of zero can hide a
+    # device type invented and another missed, so the classes never net off.
+    false_positive = sorted(d for d in got if d not in want and got[d] > 0)
+    false_negative = sorted(d for d in want if d not in got or got.get(d, 0) == 0)
+    discrepancy = sorted(d for d in set(want) & set(got)
+                         if abs(got[d] - want[d]) > 1e-9 and got[d] > 0)
+    matched = sorted(d for d in set(want) & set(got)
+                     if abs(got[d] - want[d]) <= 1e-9)
+
     print(f"   {'device type':<26} {'baseline':>9} {'engine':>8} {'diff':>8}")
     for dt in sorted(set(want) | set(got)):
         w, g = want.get(dt, 0.0), got.get(dt, 0.0)
-        d = g - w
-        if abs(d) > 1e-9:
-            failures += 1
-        print(f"   {dt:<26} {w:>9.0f} {g:>8.0f} {d:>+8.0f}")
+        print(f"   {dt:<26} {w:>9.0f} {g:>8.0f} {g - w:>+8.0f}")
+
+    print(f"\n   matched exactly        {len(matched)}")
+    print(f"   quantity discrepancies {len(discrepancy)}"
+          + (f"  {discrepancy}" if discrepancy else ""))
+    print(f"   false positives        {len(false_positive)}"
+          + "  (engine produced, engineer did not)"
+          + (f"  {false_positive}" if false_positive else ""))
+    print(f"   false negatives        {len(false_negative)}"
+          + "  (engineer issued, engine missed)"
+          + (f"  {false_negative}" if false_negative else ""))
+    unresolved = [f for f in findings if f.code in
+                  ("SYMBOL-UNRESOLVED", "NO-MOUNTING-HEIGHT", "BOQ-UNRESOLVED")]
+    print(f"   unresolved items       {len(unresolved)}")
+    failures = len(discrepancy) + len(false_positive) + len(false_negative)
 
     blockers = [f for f in findings if f.severity == "blocker"]
     print(f"\n{'-'*62}\nfindings: {len(findings)} ({len(blockers)} blocker)")

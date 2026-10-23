@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Verify a remote Supabase project after credential rotation.
+#
+#   scripts/verify-remote --db "$DATABASE_URL" \
+#                         --url https://<ref>.supabase.co \
+#                         --publishable sb_publishable_xxx
+#
+# Every check below is one this repository can run but has NOT run: no remote
+# credentials have been available in any session. Nothing here may be reported
+# as verified until this script has actually been executed and its output kept.
+#
+# It never prints a secret. The publishable key is public by design and is the
+# only key it accepts; the secret key is deliberately not an argument, because
+# nothing here needs it.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+DB=""; URL=""; PUB=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --db) DB="$2"; shift 2 ;;
+    --url) URL="$2"; shift 2 ;;
+    --publishable) PUB="$2"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+[ -z "$DB" ] && { echo "usage: $0 --db <url> [--url <project>] [--publishable <key>]" >&2; exit 2; }
+
+fail=0
+section() { echo; echo "== $1 =="; }
+ok()   { printf '  ok    %s\n' "$1"; }
+bad()  { printf '  FAIL  %s\n' "$1"; fail=1; }
+
+section "connectivity"
+if psql -tAX -v ON_ERROR_STOP=1 -d "$DB" -c "select 1" >/dev/null 2>&1; then
+  ok "connected ($(psql -tAX -d "$DB" -c 'select current_database()'))"
+else
+  bad "cannot connect; nothing below ran, which is not a pass"; exit 1
+fi
+
+section "migration history"
+# Every object the 25 migrations create must exist. A remote that is behind will
+# fail here rather than silently diverge.
+for obj in organizations users engineering_rules rule_versions product_models \
+           craft_operations rule_relationships rule_precedence_policy; do
+  n=$(psql -tAX -d "$DB" -c "select to_regclass('public.$obj') is not null")
+  [ "$n" = "t" ] && ok "table $obj" || bad "table $obj MISSING (remote is behind)"
+done
+for v in engine_readiness product_variant_traps; do
+  n=$(psql -tAX -d "$DB" -c "select to_regclass('public.$v') is not null")
+  [ "$n" = "t" ] && ok "view $v" || bad "view $v MISSING (0020/0021 not applied)"
+done
+n=$(psql -tAX -d "$DB" -c "select count(*) from information_schema.columns
+     where table_name='craft_operations' and column_name in ('assumptions_json','findings_json')")
+[ "$n" = "2" ] && ok "0025 applied (assumptions_json, findings_json)" \
+                || bad "0025 NOT applied (found $n of 2 columns)"
+
+section "row level security and view permissions"
+if ./scripts/check-rls "$DB" >/tmp/_rls.out 2>&1; then
+  sed 's/^/  /' /tmp/_rls.out | grep -E "ok|note" || true
+else
+  sed 's/^/  /' /tmp/_rls.out; bad "RLS posture"
+fi
+
+section "tenant isolation"
+if ./scripts/tests/tenant-isolation.test.sh "$DB" >/tmp/_iso.out 2>&1; then
+  ok "all isolation checks passed"
+else
+  sed 's/^/  /' /tmp/_iso.out | grep FAIL; bad "tenant isolation"
+fi
+
+section "data bootstrap"
+# The seed migrations loop over organizations. With none, they insert nothing
+# and report success, leaving an empty rules library on a schema that looks
+# complete. See docs/runbooks/craft-operations-repair.md.
+orgs=$(psql -tAX -d "$DB" -c "select count(*) from organizations")
+rules=$(psql -tAX -d "$DB" -c "select count(*) from rule_versions")
+prods=$(psql -tAX -d "$DB" -c "select count(*) from product_models")
+echo "  organizations=$orgs  rule_versions=$rules  product_models=$prods"
+if [ "$orgs" = "0" ]; then
+  bad "no organisation: the seed migrations inserted nothing, so the rules
+        library and catalogue are empty on a schema that looks complete"
+elif [ "$rules" = "0" ] || [ "$prods" = "0" ]; then
+  bad "an organisation exists but the seeds did not load; re-run 0015-0021"
+else
+  ok "rules and catalogue are populated"
+fi
+
+if [ -n "$URL" ] && [ -n "$PUB" ]; then
+  section "PostgREST exposure (publishable key)"
+  for v in engine_readiness product_variant_traps product_models engineering_rules; do
+    body=$(curl -s --max-time 20 "$URL/rest/v1/$v?select=*&limit=1" -H "apikey: $PUB" || echo "__curl_failed__")
+    if [ "$body" = "__curl_failed__" ]; then
+      bad "$v: request failed; the check did not run"
+    elif [ "$body" = "[]" ]; then
+      ok "$v returns no rows to the publishable key"
+    elif echo "$body" | grep -q '"code"'; then
+      ok "$v is refused to the publishable key"
+    else
+      bad "$v LEAKS DATA to the publishable key: ${body:0:120}"
+    fi
+  done
+else
+  section "PostgREST exposure"
+  echo "  SKIPPED: pass --url and --publishable to run it."
+  bad "the exposure check did not run, so it is not verified"
+fi
+
+echo
+if [ "$fail" -eq 0 ]; then
+  echo "REMOTE VERIFICATION PASSED. Record this output with the date."
+else
+  echo "REMOTE VERIFICATION FAILED or INCOMPLETE. Do not report it as verified."
+fi
+exit "$fail"
