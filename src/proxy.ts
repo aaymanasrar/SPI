@@ -10,6 +10,12 @@ import { createServerClient } from "@supabase/ssr";
  * authorization solution", and a proxy check can be bypassed by anything that
  * reaches a Server Action directly.
  *
+ * The two variables below are read server-side only, so they are NOT
+ * NEXT_PUBLIC_. The publishable key is public by design, but prefixing it would
+ * inline the project reference into every client bundle for no benefit. A
+ * browser-side Supabase client, if one is ever added, would need NEXT_PUBLIC_
+ * copies.
+ *
  * Real enforcement lives in requireSession() for pages and
  * requirePermission() inside every Server Action. The redirect below is a
  * convenience so unauthenticated users land on the login page, not a
@@ -19,8 +25,8 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         getAll() {

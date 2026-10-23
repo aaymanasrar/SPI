@@ -299,10 +299,171 @@ def test_soffice_path_env_is_honoured(monkeypatch, tmp_path):
     assert find_soffice() == str(fake)
 
 
-@pytest.mark.skipif(__import__("craft.word.to_pdf", fromlist=["x"]).find_soffice() is None,
-                    reason="LibreOffice is not installed on this machine")
-def test_to_pdf_really_converts(storage):
+needs_soffice = pytest.mark.skipif(
+    __import__("craft.word.to_pdf", fromlist=["x"]).find_soffice() is None,
+    reason="LibreOffice is not installed on this machine")
+
+
+def _pdf_text(storage, key: str) -> tuple[str, int]:
+    """Read the converted PDF back. Asserting bytes start with %PDF proves a
+    file appeared, not that the content survived the conversion."""
+    from craft.pdf import ExtractInput, extract
+    r = extract(ExtractInput(document_id="x", storage_key=key), storage)
+    assert r.status == "ok", r.missing
+    pages = r.outputs["pages"]
+    return "\n".join(p["text"] for p in pages), len(pages)
+
+
+@needs_soffice
+def test_to_pdf_produces_a_pdf(storage):
     storage.write("a.docx", templates.build("transmittal"))
     r = to_pdf(ToPdfInput(storage_key="a.docx", output_key="out/a.pdf"), storage)
     assert r.status == "ok"
     assert storage.read("out/a.pdf").startswith(b"%PDF")
+    assert r.outputs["converted_from"] == "a.docx"
+
+
+@needs_soffice
+def test_converted_pdf_keeps_every_filled_value(storage):
+    """The conversion must not silently drop content."""
+    values = {k: f"VALUE-{k.upper()}" for k in templates.placeholders("submittal_cover")}
+    fill_template(FillInput(template_key="templates/submittal_cover.docx",
+                            values=values, output_key="filled.docx"), storage)
+    to_pdf(ToPdfInput(storage_key="filled.docx", output_key="out/filled.pdf"), storage)
+
+    text, pages = _pdf_text(storage, "out/filled.pdf")
+    assert pages == 1
+    for key, value in values.items():
+        assert value in text, f"{key} ({value}) did not survive conversion"
+
+
+@needs_soffice
+def test_converted_pdf_keeps_the_metadata_labels(storage):
+    """The label/value table is a real table; a conversion that flattened it
+    would lose the labels and leave bare values."""
+    values = {k: f"v-{k}" for k in templates.placeholders("submittal_cover")}
+    fill_template(FillInput(template_key="templates/submittal_cover.docx",
+                            values=values, output_key="m.docx"), storage)
+    to_pdf(ToPdfInput(storage_key="m.docx", output_key="out/m.pdf"), storage)
+    text, _ = _pdf_text(storage, "out/m.pdf")
+    for label in ("Project", "Project number", "Package", "Specification section",
+                  "Manufacturer", "Model", "Prepared by"):
+        assert label in text, f"label {label!r} lost"
+    assert "Material Submittal" in text          # the title
+
+
+@needs_soffice
+def test_converted_compliance_sheet_keeps_the_table(storage):
+    """Every clause, verdict and remark must appear. A compliance sheet whose
+    table was dropped in conversion would be issued as if complete."""
+    r = compliance_sheet(ComplianceInput(
+        project_name="Riyadh Commercial Tower", product_model="FDO221",
+        clauses=CLAUSES,
+        captured_specs={"operating_voltage_v": 24.0, "quiescent_current_ma": 0.9},
+        spec_source="Siemens capture 0020", output_key="c.docx"), storage)
+    assert r.status == "ok"
+    to_pdf(ToPdfInput(storage_key="c.docx", output_key="out/c.pdf"), storage)
+
+    text, pages = _pdf_text(storage, "out/c.pdf")
+    assert pages == 1
+    for ref in ("2.3.A", "2.3.B", "2.4.A"):
+        assert ref in text, f"clause {ref} lost"
+    assert "Comply" in text and "Deviate" in text and "Clarify" in text
+    assert "0.9" in text and "0.5" in text              # the deviation figures
+    assert "Siemens capture 0020" in text               # provenance
+    assert "not a submittal until signed" in text       # the caveat
+    assert "Riyadh Commercial Tower" in text
+
+
+@needs_soffice
+def test_converted_pdf_keeps_the_footer(storage):
+    """A footer lives in a separate XML part; it is the thing most often lost."""
+    values = {k: f"v-{k}" for k in templates.placeholders("transmittal")}
+    values["project_number"] = "RYD-001"
+    fill_template(FillInput(template_key="templates/transmittal.docx",
+                            values=values, output_key="f.docx"), storage)
+    to_pdf(ToPdfInput(storage_key="f.docx", output_key="out/f.pdf"), storage)
+    text, _ = _pdf_text(storage, "out/f.pdf")
+    assert "RYD-001" in text
+
+
+@needs_soffice
+def test_converted_pdf_has_no_missing_glyphs(storage):
+    """A missing font renders as tofu. The templates ask for Calibri, which is
+    absent on Linux unless fonts-crosextra-carlito is installed."""
+    values = {k: f"v-{k}" for k in templates.placeholders("compliance")}
+    fill_template(FillInput(template_key="templates/compliance.docx",
+                            values=values, output_key="g.docx"), storage)
+    to_pdf(ToPdfInput(storage_key="g.docx", output_key="out/g.pdf"), storage)
+    text, _ = _pdf_text(storage, "out/g.pdf")
+    assert text.strip(), "conversion produced a page with no extractable text"
+    for tofu in ("\ufffd", "\u25a1", "\u25a0"):
+        assert tofu not in text, f"missing-glyph character {tofu!r} in output"
+    # The middle dot in the footer separator is non-ASCII and a good canary.
+    assert "\u00b7" in text or "Rev" in text
+
+
+@needs_soffice
+def test_multi_page_document_converts_every_page(storage):
+    """A long document must not be truncated to its first page."""
+    import docx as _docx
+    from craft.word import style as _style
+    doc = _style.new_document()
+    _style.add_title(doc, "Long Document")
+    for i in range(1, 121):
+        doc.add_paragraph(f"Line {i} of one hundred and twenty.")
+    buf = io.BytesIO(); doc.save(buf)
+    storage.write("long.docx", buf.getvalue())
+
+    to_pdf(ToPdfInput(storage_key="long.docx", output_key="out/long.pdf"), storage)
+    text, pages = _pdf_text(storage, "out/long.pdf")
+    assert pages >= 2, f"120 paragraphs rendered on {pages} page(s)"
+    assert "Line 1 of" in text and "Line 120 of" in text
+
+
+@needs_soffice
+def test_to_pdf_refuses_to_overwrite_and_leaves_the_source_alone(storage):
+    storage.write("src.docx", templates.build("transmittal"))
+    before = storage.read("src.docx")
+    to_pdf(ToPdfInput(storage_key="src.docx", output_key="out/once.pdf"), storage)
+    with pytest.raises(InvalidInput):
+        to_pdf(ToPdfInput(storage_key="src.docx", output_key="out/once.pdf"), storage)
+    assert storage.read("src.docx") == before
+
+
+@needs_soffice
+def test_two_conversions_in_a_row_both_succeed(storage):
+    """A shared LibreOffice profile makes the second call exit silently; to_pdf
+    isolates the profile per call with -env:UserInstallation."""
+    storage.write("x.docx", templates.build("transmittal"))
+    a = to_pdf(ToPdfInput(storage_key="x.docx", output_key="out/x1.pdf"), storage)
+    b = to_pdf(ToPdfInput(storage_key="x.docx", output_key="out/x2.pdf"), storage)
+    assert a.status == "ok" and b.status == "ok"
+    assert storage.read("out/x1.pdf")[:5] == b"%PDF-"
+    assert storage.read("out/x2.pdf")[:5] == b"%PDF-"
+
+
+@needs_soffice
+def test_the_whole_chain_word_to_pdf_to_pack(storage):
+    """Cover and compliance, converted, merged and stamped, then read back."""
+    from craft.pdf import PackInput, StampSpec, pack
+    cover = {k: f"v-{k}" for k in templates.placeholders("submittal_cover")}
+    fill_template(FillInput(template_key="templates/submittal_cover.docx",
+                            values=cover, output_key="ch.docx"), storage)
+    compliance_sheet(ComplianceInput(
+        project_name="P", product_model="M", clauses=[CLAUSES[0]],
+        captured_specs={"operating_voltage_v": 24.0},
+        spec_source="src", output_key="cc.docx"), storage)
+    for name in ("ch", "cc"):
+        to_pdf(ToPdfInput(storage_key=f"{name}.docx", output_key=f"{name}.pdf"), storage)
+
+    p = pack(PackInput(storage_keys=["ch.pdf", "cc.pdf"],
+                       stamp=StampSpec(text="Rev 03 - FOR APPROVAL"),
+                       output_key="out/chain.pdf"), storage)
+    assert p.status == "ok"
+    assert p.outputs["page_count"] == 2
+    text, pages = _pdf_text(storage, "out/chain.pdf")
+    assert pages == 2
+    assert text.count("Rev 03 - FOR APPROVAL") == 2     # stamped on both
+    assert "Page 1 of 2" in text and "Page 2 of 2" in text
+    assert "Material Submittal" in text and "Compliance Statement" in text
