@@ -30,6 +30,23 @@ export type CraftResult = {
   provenance: { value_ref: string; source: string }[];
   missing: { field: string; record: string; note: string | null }[];
   warnings: string[];
+  /** Values used because nothing authoritative supplied one. */
+  assumptions?: Array<{
+    key: string;
+    value: unknown;
+    unit?: string | null;
+    basis: string;
+    status: "assumed" | "verified";
+    verify_from: string;
+  }>;
+  /** Actionable items. 'blocker' means the result must not be relied on. */
+  findings?: Array<{
+    code: string;
+    severity: "info" | "review" | "blocker";
+    subject: string;
+    detail: string;
+    action: string;
+  }>;
   /** Set iff status === 'error'. */
   error?: string | null;
   engine_version: string;

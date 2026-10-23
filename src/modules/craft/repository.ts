@@ -27,6 +27,8 @@ export type RecordOperationInput = {
   warnings: unknown;
   status: CraftStatus;
   error: string | null;
+  assumptions?: unknown[];
+  findings?: unknown[];
   durationMs: number | null;
   engineVersion: string;
 };
@@ -41,7 +43,8 @@ export async function recordOperation(
     insert into craft_operations (
       organization_id, project_id, engine, tool, actor_type, actor_id, mode,
       input_json, output_json, input_document_ids, output_document_ids,
-      provenance_json, missing_json, warnings_json, status, error,
+      provenance_json, missing_json, warnings_json,
+      assumptions_json, findings_json, status, error,
       duration_ms, engine_version
     ) values (
       ${input.organizationId}, ${input.projectId}, ${input.engine}, ${input.tool},
@@ -49,7 +52,10 @@ export async function recordOperation(
       ${JSON.stringify(input.input ?? {})}, ${input.output === null ? null : JSON.stringify(input.output)},
       ${input.inputDocumentIds}, ${input.outputDocumentIds},
       ${JSON.stringify(input.provenance ?? [])}, ${JSON.stringify(input.missing ?? [])},
-      ${JSON.stringify(input.warnings ?? [])}, ${input.status}, ${input.error},
+      ${JSON.stringify(input.warnings ?? [])},
+      ${JSON.stringify(input.assumptions ?? [])},
+      ${JSON.stringify(input.findings ?? [])},
+      ${input.status}, ${input.error},
       ${input.durationMs}, ${input.engineVersion}
     )
     returning id, created_at`;

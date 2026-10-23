@@ -10,7 +10,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, Field
 
-from ..core import (ENGINE_VERSION, LocalStorage, MissingItem, OutputFile,
+from ..core import (ENGINE_VERSION, Finding, LocalStorage, MissingItem, OutputFile,
                     Provenance, Storage, ToolResult, register, sha256)
 from .formulas import product, total
 
@@ -40,6 +40,11 @@ class BoqLine(BaseModel):
     #: come from?", which ARCHITECTURE.md 18.2 requires of every engineering
     #: value.
     quantity_reference: str | None = None
+    #: How much authority this line's quantity carries. Losing this distinction
+    #: is how a proposal becomes a quotation.
+    evidence: Literal["extracted", "calculated", "manual", "approved"] = "manual"
+    #: Set when the catalogue could not resolve a single product for this line.
+    product_candidates: list[str] | None = None
     boq_item_id: str | None = None
     part_number: str | None = None
     unit_cost_minor: int | None = None
@@ -170,6 +175,33 @@ def write_boq(data: WriteBoqInput, storage: Storage | None = None) -> ToolResult
         sheet_totals[system] = _sheet(wb, system, lines, data.currency, prov,
                                       untraceable)
 
+    # Anything unresolved is written INTO the workbook. A gap that exists only
+    # in an API response is invisible to whoever opens the file.
+    unresolved: list[tuple[str, str, str]] = []
+    for ln in data.lines:
+        who = ln.boq_item_id or ln.description
+        if ln.unit_cost_minor is None:
+            unresolved.append((who, "price",
+                               "No unit price resolved. Spec 13.2 has no fallback "
+                               "to a market price."))
+        elif not ln.price_source:
+            unresolved.append((who, "price source",
+                               "A rate is present with no stated source."))
+        if ln.product_candidates:
+            unresolved.append((who, "product mapping",
+                               "Ambiguous: " + ", ".join(ln.product_candidates)
+                               + ". No single model was chosen."))
+        elif not ln.part_number:
+            unresolved.append((who, "product mapping",
+                               "No manufacturer or model mapped to this line."))
+        if ln.evidence not in ("approved",):
+            pass   # recorded per line in the sheet, not an unresolved item
+    for who, what, why in unresolved:
+        res.findings.append(Finding(
+            code="BOQ-UNRESOLVED", severity="review",
+            subject=f"boq_item:{who}", detail=f"{what}: {why}",
+            action=f"Capture the {what} for '{who}' before this line is quoted."))
+
     # Summary first, built from cross-sheet references so Excel keeps it live.
     summary = wb.create_sheet("Summary", 0)
     summary.append([f"{data.project_name} ({data.project_code})"])
@@ -190,6 +222,18 @@ def write_boq(data: WriteBoqInput, storage: Storage | None = None) -> ToolResult
     gt.font, gt.number_format = Font(bold=True), MONEY
     summary.column_dimensions["A"].width = 40
     summary.column_dimensions["B"].width = 18
+
+    if unresolved:
+        uws = wb.create_sheet("Unresolved")
+        uws.append(["Line", "What is missing", "Why it matters"])
+        for c in uws[1]:
+            c.fill, c.font = HDR_FILL, HDR_FONT
+        for row in unresolved:
+            uws.append(list(row))
+        uws.column_dimensions["A"].width = 38
+        uws.column_dimensions["B"].width = 20
+        uws.column_dimensions["C"].width = 62
+        uws.sheet_properties.tabColor = "C00000"
 
     # Provenance sheet: hidden, because it is for audit rather than for reading,
     # but present in the file so the workbook can always answer for itself.
@@ -231,6 +275,12 @@ def write_boq(data: WriteBoqInput, storage: Storage | None = None) -> ToolResult
         "grand_total": round(sum(sheet_totals.values()), 2),
         "currency": data.currency,
         "priced_lines": sum(1 for l in data.lines if l.unit_cost_minor is not None),
+        # Everything still open on this BOQ, in the response and in the file.
+        "unresolved": [{"line": w, "field": f, "reason": r}
+                       for w, f, r in unresolved],
+        "evidence_grades": {
+            g: sum(1 for ln in data.lines if ln.evidence == g)
+            for g in ("extracted", "calculated", "manual", "approved")},
     }
     unpriced = [l for l in data.lines if l.unit_cost_minor is None]
     if unpriced:

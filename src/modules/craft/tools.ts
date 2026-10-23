@@ -101,6 +101,24 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "cad.check_dimensions": {
+    name: "cad.check_dimensions",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "cad.check_coverage": {
+    name: "cad.check_coverage",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    // Checking is not proposing. It writes nothing and decides nothing; it
+    // reports findings against a named rule.
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   "cad.markup": {
     name: "cad.markup",
     engine: "cad",

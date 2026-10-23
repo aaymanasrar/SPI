@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
+from .findings import Assumption, Evidence, Finding, Severity, worst
+
 ENGINE_VERSION = "engines@0.1.0"
 
 Status = Literal["ok", "missing_data", "invalid_input", "error"]
@@ -41,12 +43,28 @@ class ToolResult(BaseModel):
     provenance: list[Provenance] = Field(default_factory=list)
     missing: list[MissingItem] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    #: Values used because nothing authoritative supplied one. Each one is a
+    #: question someone still has to answer.
+    assumptions: list[Assumption] = Field(default_factory=list)
+    #: Actionable items. A blocker finding means the result must not be relied
+    #: on, which the validator below enforces rather than leaving to good
+    #: intentions.
+    findings: list[Finding] = Field(default_factory=list)
     # Set iff status == 'error'. Migration 0023 constrains
     # (status = 'error') = (error is not null) on craft_operations, so a failure
     # with no message cannot be recorded at all.
     error: str | None = None
     engine_version: str = ENGINE_VERSION
     duration_ms: int | None = None
+
+    @model_validator(mode="after")
+    def _blocker_cannot_be_ok(self) -> "ToolResult":
+        if self.status == "ok" and worst(self.findings) == "blocker":
+            raise ValueError(
+                "status='ok' with a blocker finding present. A blocker means the "
+                "result cannot be relied on; returning it as ok is exactly the "
+                "apparently-authoritative output this envelope exists to prevent.")
+        return self
 
     @model_validator(mode="after")
     def _error_iff_failed(self) -> "ToolResult":

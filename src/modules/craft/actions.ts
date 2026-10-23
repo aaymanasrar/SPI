@@ -83,6 +83,8 @@ export async function runCraftToolAction(
         provenance: result.provenance,
         missing: result.missing,
         warnings: result.warnings,
+        assumptions: result.assumptions ?? [],
+        findings: result.findings ?? [],
         status: result.status,
         // Prefer the engine's own message: ToolUnavailable sets `error` and no
         // warnings, and it is the one that names the missing program.

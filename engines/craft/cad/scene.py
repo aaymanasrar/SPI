@@ -25,8 +25,8 @@ import time
 
 from pydantic import BaseModel, Field
 
-from ..core import (ENGINE_VERSION, InvalidInput, MissingItem, Provenance,
-                    Storage, ToolResult, register)
+from ..core import (ENGINE_VERSION, Assumption, Finding, InvalidInput, MissingItem,
+                    Provenance, Storage, ToolResult, register)
 from .count import CountInput, count_devices
 from .read_dxf import open_dxf
 from .rooms import RoomsInput, extract_rooms, polygon_area
@@ -54,6 +54,17 @@ class Scene3dInput(BaseModel):
     ceiling_height_m: float = Field(
         description="slab-to-ceiling in metres. NOT on the floor plan -- take it "
                     "from the sections or the reflected ceiling plan.")
+    ceiling_height_verified_from: str | None = Field(
+        None,
+        description="the document this height was read from, e.g. "
+                    "'A-201 section B-B'. Leave null and the height is recorded "
+                    "as an ASSUMPTION with a finding against it, because a "
+                    "number nobody sourced must not look like one somebody did.")
+    unresolved_symbols: dict[str, str] = Field(
+        default_factory=dict,
+        description="codes on the drawing with no legend, e.g. {'IMR': 'blue "
+                    "room code, no legend on this sheet'}. Each becomes a "
+                    "finding; none is interpreted.")
     mounting_heights: dict[str, MountingHeight] = Field(
         default_factory=dict,
         description="device_type -> where it sits, with the rule that says so")
@@ -133,6 +144,40 @@ def scene_3d(data: Scene3dInput, storage: Storage | None = None) -> ToolResult:
             "source_reference": obj["source_reference"],
         })
 
+    # The ceiling height is either sourced or it is an assumption. There is no
+    # third state in which it is simply a number.
+    if data.ceiling_height_verified_from:
+        res.assumptions.append(Assumption(
+            key="ceiling_height_m", value=data.ceiling_height_m, unit="m",
+            basis=f"read from {data.ceiling_height_verified_from}",
+            status="verified",
+            verify_from=data.ceiling_height_verified_from))
+    else:
+        res.assumptions.append(Assumption(
+            key="ceiling_height_m", value=data.ceiling_height_m, unit="m",
+            basis="supplied by the caller with no source document named",
+            status="assumed",
+            verify_from="architectural sections or the reflected ceiling plan"))
+        res.findings.append(Finding(
+            code="ASSUMED-CEILING-HEIGHT", severity="review",
+            subject=f"document:{data.document_id}",
+            detail=f"Every ceiling-mounted device sits at {data.ceiling_height_m} m "
+                   "because that height was supplied without a source. A floor plan "
+                   "is a horizontal section and carries no vertical dimension, so "
+                   "nothing in the drawing confirms it.",
+            action="Read the slab-to-ceiling height off the sections or the "
+                   "reflected ceiling plan and pass it as "
+                   "ceiling_height_verified_from."))
+
+    for code, note in sorted(data.unresolved_symbols.items()):
+        res.findings.append(Finding(
+            code="SYMBOL-UNRESOLVED", severity="review",
+            subject=f"symbol:{code}",
+            detail=f"'{code}' appears on the drawing and no legend on this sheet "
+                   f"defines it ({note}). It has not been interpreted, and nothing "
+                   "in this model depends on a guess about what it means.",
+            action=f"Supply the legend sheet or an approved mapping for '{code}'."))
+
     systems = sorted({d["system"] for d in devices})
     res.outputs = {
         "units": {"insunits": insunits, "name": unit_name, "metres_per_unit": mpu},
@@ -158,6 +203,13 @@ def scene_3d(data: Scene3dInput, storage: Storage | None = None) -> ToolResult:
     res.missing = list(rooms_res.missing) + list(count_res.missing)
     res.warnings = list(rooms_res.warnings) + list(count_res.warnings)
     for dt, n in sorted(unresolved.items()):
+        res.findings.append(Finding(
+            code="NO-MOUNTING-HEIGHT", severity="review",
+            subject=f"device_type:{dt}",
+            detail=f"{n} {dt}(s) are located in plan but have no vertical "
+                   "position, because no mounting height was supplied for the type.",
+            action=f"Supply a mounting height for '{dt}' with the rule it comes "
+                   "from (for example SPT-FA-12, NFPA 72 17.15.9)."))
         res.missing.append(MissingItem(
             field="mounting_height", record=f"device_type:{dt}",
             note=f"{n} {dt}(s) placed in plan but with no mounting height supplied, "

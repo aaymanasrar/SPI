@@ -278,3 +278,87 @@ def test_rule_execution_still_takes_precedence(store):
     sources = [p.source for p in r.provenance]
     assert "rule_execution:re-123" in sources
     assert "should not win" not in sources
+
+
+# ---------------------------------------------------------------------------
+# The BOQ must never look finished while something in it is unresolved.
+# ---------------------------------------------------------------------------
+
+def _line(**kw):
+    base = dict(description="Smoke Detector", unit="no", quantity=14.0,
+                system="fire_alarm", quantity_source="imported",
+                quantity_reference="cad.count_devices on L01.dxf",
+                evidence="extracted", part_number="FDO221",
+                unit_cost_minor=18500, price_source="SPT price list 2026-Q4",
+                currency="SAR")
+    base.update(kw)
+    return BoqLine(**base)
+
+
+def _sheetnames(store, key):
+    import io as _io
+    from openpyxl import load_workbook
+    return load_workbook(_io.BytesIO(store.read(key))).sheetnames
+
+
+def test_a_complete_line_leaves_no_unresolved_register(store):
+    r = _write(store, [_line()], "out/clean.xlsx")
+    assert r.outputs["unresolved"] == []
+    assert "Unresolved" not in _sheetnames(store, "out/clean.xlsx")
+    assert not [f for f in r.findings if f.code == "BOQ-UNRESOLVED"]
+
+
+def test_a_missing_price_is_written_into_the_workbook(store):
+    """Visible to whoever opens the file, not only in an API response."""
+    r = _write(store, [_line(unit_cost_minor=None, price_source=None)],
+               "out/nop.xlsx", require_pricing=False)
+    assert r.status == "ok"
+    assert "Unresolved" in _sheetnames(store, "out/nop.xlsx")
+    assert any(u["field"] == "price" for u in r.outputs["unresolved"])
+    f = next(x for x in r.findings if x.code == "BOQ-UNRESOLVED")
+    assert "before this line is quoted" in f.action
+
+
+def test_a_rate_with_no_stated_source_is_unresolved(store):
+    r = _write(store, [_line(price_source=None)], "out/nosrc.xlsx")
+    assert any(u["field"] == "price source" for u in r.outputs["unresolved"])
+
+
+def test_an_ambiguous_product_mapping_is_never_resolved_silently(store):
+    r = _write(store, [_line(part_number=None,
+                             product_candidates=["FDO221", "FDO241"])],
+               "out/amb.xlsx")
+    u = next(x for x in r.outputs["unresolved"] if x["field"] == "product mapping")
+    assert "FDO221" in u["reason"] and "FDO241" in u["reason"]
+    assert "No single model was chosen" in u["reason"]
+
+
+def test_a_line_with_no_product_mapped_is_unresolved(store):
+    r = _write(store, [_line(part_number=None)], "out/nopart.xlsx")
+    assert any(x["field"] == "product mapping" for x in r.outputs["unresolved"])
+
+
+def test_evidence_grades_are_counted_and_kept_apart(store):
+    r = _write(store, [_line(description="A", evidence="extracted"),
+                       _line(description="B", evidence="calculated"),
+                       _line(description="C", evidence="manual"),
+                       _line(description="D", evidence="approved")],
+               "out/grades.xlsx")
+    assert r.outputs["evidence_grades"] == {"extracted": 1, "calculated": 1,
+                                            "manual": 1, "approved": 1}
+
+
+def test_a_calculated_quantity_is_not_recorded_as_approved(store):
+    """A proposal must not acquire authority by passing through the writer."""
+    r = _write(store, [_line(evidence="calculated")], "out/calc.xlsx")
+    assert r.outputs["evidence_grades"]["approved"] == 0
+    assert r.outputs["evidence_grades"]["calculated"] == 1
+
+
+def test_missing_identifiers_do_not_cost_the_line_its_provenance(store):
+    """No boq_item_id, no rule_execution_id: provenance must still be recorded."""
+    r = _write(store, [_line(boq_item_id=None, rule_execution_id=None)],
+               "out/ids.xlsx")
+    sources = [p.source for p in r.provenance]
+    assert "cad.count_devices on L01.dxf" in sources
+    assert any(s.startswith("price_source:") for s in sources)
