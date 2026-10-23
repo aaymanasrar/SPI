@@ -763,15 +763,22 @@ finished.
 | CAD | `cad.read_dxf` | nothing — layer/block/insert inventory |
 | CAD | `cad.count_devices` | `drawing_objects` rows, `source='imported'`, `review_status='pending'` |
 | CAD | `cad.extract_rooms` | nothing — outlines, labels, areas |
+| CAD | `cad.place_devices` | `drawing_objects` proposals from a cited spacing rule |
 | CAD | `cad.markup` | a **new** DXF with notes on an `SPI_MARKUP` layer |
 | Word | `word.fill_template` | .docx from a default or supplied template |
 | Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
 | Word | `word.to_pdf` | .pdf, via LibreOffice headless |
 
-`cad.place_devices` and `cad.measure_route` are registered as `implemented=false` and raise
-`NotImplementedError`. Placement needs a spacing rule with a citation from the rules engine, and no
-spacing value exists anywhere in this package. Routing is **D-7**: measuring a straight line between
-two symbols is the fabrication the previous build shipped.
+`cad.place_devices` is implemented. It was a stub while nothing could supply a spacing figure with
+a source; the rules library now carries them, and the rule is passed in as data — `max_spacing_m`,
+`max_wall_distance_m` and the code that says so. **No spacing value exists anywhere in the package**,
+and a test asserts it. Everything it emits is a proposal: `source='ai_extracted'`,
+`review_status='pending'`, never `'imported'`, because a device counted off a drawing is evidence
+and one computed from a rule is a suggestion.
+
+`cad.measure_route` is still registered as `implemented=false` and raises `NotImplementedError`.
+Cable length needs containment routes, risers and a slack allowance — **D-7**. Measuring a straight
+line between two symbols is the fabrication the previous build shipped.
 
 ### 18.4 Word output has one default look
 

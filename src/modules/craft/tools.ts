@@ -137,9 +137,19 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
-  // cad.place_devices and cad.measure_route are deliberately absent. They are
-  // registered in the engine as implemented=false and raise NotImplementedError;
-  // listing them here would advertise them to the orchestrator as callable.
+  "cad.place_devices": {
+    name: "cad.place_devices",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    // Positions are proposals computed from a cited spacing rule, written as
+    // drawing_objects with source='ai_extracted' and review_status='pending'.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  // cad.measure_route is deliberately absent. It is registered in the engine as
+  // implemented=false and raises NotImplementedError; listing it here would
+  // advertise it to the orchestrator as callable. See D-7.
 };
 
 export function policyFor(tool: string): ToolPolicy {

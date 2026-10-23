@@ -39,9 +39,9 @@ def test_unknown_tool_is_404():
 
 
 def test_a_phase_2_stub_is_501_not_a_crash():
-    r = client.post("/tools/cad.place_devices", json={
+    r = client.post("/tools/cad.measure_route", json={
         "input": {"document_id": "d", "storage_key": "a.dxf",
-                  "system": "fire_alarm", "rule_id": "ELV-A-07"}})
+                  "from_point": [0, 0], "to_point": [1, 1]}})
     assert r.status_code == 501
     assert "not implemented" in r.json()["detail"]
 

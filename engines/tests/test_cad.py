@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from craft.cad import (MARKUP_LAYER, CountInput, default_map, MarkupInput, Note, ReadDxfInput,
                        RoomsInput, SymbolMap, count_devices, extract_rooms,
                        markup, measure_route, place_devices, read_dxf)
-from craft.cad.place import MeasureRouteInput, PlaceDevicesInput
+from craft.cad.place import MeasureRouteInput
 from craft.cad.rooms import point_in_polygon, polygon_area
 from craft.core import InvalidInput, LocalStorage
 
@@ -449,12 +449,16 @@ def test_markup_with_no_notes_is_invalid_input(storage):
 
 
 # -------------------------------------------------------------- phase 2 stubs
-def test_place_devices_refuses_and_says_why():
-    with pytest.raises(NotImplementedError) as e:
-        place_devices(PlaceDevicesInput(document_id="d", storage_key="fp.dxf",
-                                        system="fire_alarm", rule_id="ELV-A-07"))
-    msg = str(e.value)
-    assert "spacing rule" in msg and "ELV-A-07" in msg
+def test_place_devices_is_implemented_now_that_a_cited_rule_exists():
+    """It was a stub while nothing could supply a spacing figure with a source.
+    The figure still does not live in this package -- it is passed in."""
+    from craft.cad import PlaceDevicesInput, SpacingRule, place_devices
+    import inspect
+    src = inspect.getsource(place_devices)
+    assert "NotImplementedError" not in src
+    # No spacing number is hard-coded anywhere in the module.
+    import craft.cad.place as mod
+    assert "9.1" not in inspect.getsource(mod)
 
 
 def test_measure_route_refuses_and_says_why():
@@ -464,9 +468,9 @@ def test_measure_route_refuses_and_says_why():
     assert "not a cable length" in str(e.value)
 
 
-def test_stubs_are_registered_as_not_implemented():
+def test_only_route_measurement_remains_unimplemented():
     from craft.core import tool_schemas
     by_name = {s["name"]: s for s in tool_schemas()}
-    assert by_name["cad.place_devices"]["implemented"] is False
     assert by_name["cad.measure_route"]["implemented"] is False
+    assert by_name["cad.place_devices"]["implemented"] is True
     assert by_name["cad.count_devices"]["implemented"] is True
