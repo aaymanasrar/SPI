@@ -34,6 +34,12 @@ class BoqLine(BaseModel):
     ordinal: int | None = None
     quantity_source: Literal["rule_execution", "manual", "imported"] = "manual"
     rule_execution_id: str | None = None
+    #: Where an imported quantity came from, when it is not a rule execution or
+    #: an existing boq_item -- e.g. "cad.count_devices on L01.dxf". Without it a
+    #: counted quantity reaches the workbook with no answer to "where did you
+    #: come from?", which ARCHITECTURE.md 18.2 requires of every engineering
+    #: value.
+    quantity_reference: str | None = None
     boq_item_id: str | None = None
     part_number: str | None = None
     unit_cost_minor: int | None = None
@@ -56,7 +62,7 @@ class WriteBoqInput(BaseModel):
 
 
 def _sheet(wb: Workbook, name: str, lines: list[BoqLine], currency: str,
-           prov: list[Provenance]) -> float:
+           prov: list[Provenance], untraceable: list[str]) -> float:
     ws = wb.create_sheet(name[:31])
     headers = ["#", "Part number", "Description", "Unit", "Qty",
                f"Rate ({currency})", f"Amount ({currency})", "Quantity source"]
@@ -81,6 +87,10 @@ def _sheet(wb: Workbook, name: str, lines: list[BoqLine], currency: str,
         ac = ws.cell(row=row, column=7,
                      value=product(f"E{row}", f"F{row}"))
         ac.number_format = MONEY
+        # Quantity provenance. Previously this was emitted only when a
+        # rule_execution_id or a boq_item_id was present, so a quantity counted
+        # off a drawing -- the normal output of cad.count_devices -- reached the
+        # workbook with no provenance row at all.
         src = ln.quantity_source
         if ln.quantity_source == "rule_execution" and ln.rule_execution_id:
             src = f"rule_execution:{ln.rule_execution_id}"
@@ -89,7 +99,19 @@ def _sheet(wb: Workbook, name: str, lines: list[BoqLine], currency: str,
         elif ln.boq_item_id:
             prov.append(Provenance(value_ref=f"{name}!E{row}",
                                    source=f"boq_item:{ln.boq_item_id}.quantity"))
-        if ln.price_source and ln.boq_item_id:
+        elif ln.quantity_reference:
+            src = f"{ln.quantity_source}:{ln.quantity_reference}"
+            prov.append(Provenance(value_ref=f"{name}!E{row}",
+                                   source=ln.quantity_reference))
+        elif ln.quantity_source != "manual":
+            # A manual quantity is self-evidently a person's; an imported one
+            # with nothing to point at is untraceable.
+            untraceable.append(f"{name} row {row} ({ln.description})")
+
+        # Price provenance no longer requires a boq_item_id either: a rate with
+        # a stated source is traceable whether or not the line exists in the
+        # database yet.
+        if ln.price_source:
             prov.append(Provenance(value_ref=f"{name}!F{row}",
                                    source=f"price_source:{ln.price_source}"))
         ws.cell(row=row, column=8, value=src)
@@ -137,6 +159,7 @@ def write_boq(data: WriteBoqInput, storage: Storage | None = None) -> ToolResult
     wb = Workbook()
     wb.remove(wb.active)
     prov: list[Provenance] = []
+    untraceable: list[str] = []
 
     by_system: dict[str, list[BoqLine]] = {}
     for ln in data.lines:
@@ -144,7 +167,8 @@ def write_boq(data: WriteBoqInput, storage: Storage | None = None) -> ToolResult
 
     sheet_totals: dict[str, float] = {}
     for system, lines in by_system.items():
-        sheet_totals[system] = _sheet(wb, system, lines, data.currency, prov)
+        sheet_totals[system] = _sheet(wb, system, lines, data.currency, prov,
+                                      untraceable)
 
     # Summary first, built from cross-sheet references so Excel keeps it live.
     summary = wb.create_sheet("Summary", 0)
@@ -192,6 +216,13 @@ def write_boq(data: WriteBoqInput, storage: Storage | None = None) -> ToolResult
         storage.write(key, payload)
     res.files = [OutputFile(name=name, mime=XLSX_MIME, storage_key=key,
                             byte_size=len(payload), sha256=sha256(payload))]
+    if untraceable:
+        res.warnings.append(
+            f"{len(untraceable)} quantity cell(s) have no provenance: "
+            + "; ".join(untraceable[:5])
+            + ("; …" if len(untraceable) > 5 else "")
+            + ". Set quantity_reference (e.g. 'cad.count_devices on L01.dxf') so "
+              "the figure can be traced back to what produced it.")
     res.provenance = prov
     res.outputs = {
         "systems": list(by_system),

@@ -191,3 +191,90 @@ def test_registry_exposes_json_schemas_only():
     spec = next(s for s in tool_schemas() if s["name"] == "grid.read_client_boq")
     assert spec["modes"] == ["preview"]          # reading a client file never commits
     assert "storage_key" in spec["input_schema"]["properties"]
+
+
+# ---------------------------------------------------------------------------
+# Provenance gaps found by the end-to-end run, where a BOQ is built from a
+# drawing count rather than from rule executions or existing boq_items.
+# ---------------------------------------------------------------------------
+
+def _counted_line(**kw):
+    base = dict(description="Smoke Detector", unit="no", quantity=14.0,
+                system="fire_alarm", quantity_source="imported",
+                unit_cost_minor=18500, price_source="SPT price list 2026-Q4",
+                currency="SAR")
+    base.update(kw)
+    return BoqLine(**base)
+
+
+def _write(store, lines, key, **kw):
+    return write_boq(WriteBoqInput(boq_id="B1", project_name="P", project_code="C",
+                                   lines=lines, currency="SAR", output_key=key,
+                                   **kw), store)
+
+
+def test_an_imported_quantity_records_where_it_came_from(store):
+    """A quantity counted off a drawing must answer 'where did you come from?'
+    even with no rule_execution_id and no boq_item_id."""
+    r = _write(store, [_counted_line(
+        quantity_reference="cad.count_devices on L01.dxf")], "out/q.xlsx")
+    assert r.status == "ok"
+    sources = [p.source for p in r.provenance]
+    assert "cad.count_devices on L01.dxf" in sources
+    assert r.warnings == [] or not any("no provenance" in w for w in r.warnings)
+
+
+def test_an_imported_quantity_with_no_reference_is_flagged(store):
+    """It is still written -- an unpriced or unreferenced BOQ is a legitimate
+    deliverable -- but it is named, not passed over in silence."""
+    r = _write(store, [_counted_line()], "out/q2.xlsx")
+    assert r.status == "ok"
+    assert any("no provenance" in w for w in r.warnings)
+    assert any("Smoke Detector" in w for w in r.warnings)
+
+
+def test_a_manual_quantity_is_not_flagged(store):
+    """A manual figure is self-evidently a person's; demanding a reference
+    would make every hand-entered line a warning."""
+    r = _write(store, [_counted_line(quantity_source="manual")], "out/q3.xlsx")
+    assert not any("no provenance" in w for w in r.warnings)
+
+
+def test_price_provenance_does_not_require_a_boq_item_id(store):
+    """The original condition was `price_source and boq_item_id`, so a rate with
+    a stated source but no database row recorded nothing."""
+    r = _write(store, [_counted_line(
+        quantity_reference="cad.count_devices on L01.dxf")], "out/p.xlsx")
+    assert any(p.source == "price_source:SPT price list 2026-Q4"
+               for p in r.provenance)
+
+
+def test_quantity_reference_reaches_the_quantity_source_column(store):
+    from openpyxl import load_workbook
+    import io as _io
+    _write(store, [_counted_line(quantity_reference="cad.count_devices on L01.dxf")],
+           "out/col.xlsx")
+    wb = load_workbook(_io.BytesIO(store.read("out/col.xlsx")))
+    ws = wb["fire_alarm"]
+    assert ws.cell(row=2, column=8).value == "imported:cad.count_devices on L01.dxf"
+
+
+def test_every_priced_counted_line_gets_two_provenance_rows(store):
+    """One for the quantity, one for the rate."""
+    lines = [_counted_line(description=f"Device {i}",
+                           quantity_reference=f"cad.count_devices on L0{i}.dxf")
+             for i in range(1, 4)]
+    r = _write(store, lines, "out/two.xlsx")
+    assert len(r.provenance) == 6
+    assert sum(1 for p in r.provenance if p.source.startswith("price_source:")) == 3
+
+
+def test_rule_execution_still_takes_precedence(store):
+    """quantity_reference must not override a real rule execution."""
+    r = _write(store, [_counted_line(quantity_source="rule_execution",
+                                       rule_execution_id="re-123",
+                                       quantity_reference="should not win")],
+               "out/prec.xlsx")
+    sources = [p.source for p in r.provenance]
+    assert "rule_execution:re-123" in sources
+    assert "should not win" not in sources
