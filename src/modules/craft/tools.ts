@@ -90,6 +90,17 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "cad.scene_3d": {
+    name: "cad.scene_3d",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    // Reads a drawing and returns a scene description. It writes nothing: the
+    // viewer is built from the result, and the result is a proposal like any
+    // other count.
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   "cad.markup": {
     name: "cad.markup",
     engine: "cad",

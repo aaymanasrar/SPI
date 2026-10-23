@@ -18,7 +18,9 @@ from craft.core import TOOL_REGISTRY
 for n, s in sorted(TOOL_REGISTRY.items()):
     print(n, 'implemented' if s.implemented else 'stub')
 ")
-policy=$(grep -oE '^  \"[a-z]+\.[a-z_]+\":' src/modules/craft/tools.ts | tr -d ' ":')
+# Digits are allowed in a tool name (cad.scene_3d); the first version of this
+# pattern excluded them and reported a registered tool as missing.
+policy=$(grep -oE '^  \"[a-z0-9]+\.[a-z0-9_]+\":' src/modules/craft/tools.ts | tr -d ' ":')
 
 implemented=$(echo "$registry" | awk '$2=="implemented"{print $1}' | sort)
 stubs=$(echo "$registry" | awk '$2=="stub"{print $1}' | sort)
