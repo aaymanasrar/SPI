@@ -203,6 +203,13 @@ def takeoff_sheet(data: TakeoffSheetInput, storage: Storage | None = None) -> To
 
     # ---- count, exactly as cad.count_devices does --------------------------
     hits, unmapped = scan_inserts(msp, smap, data.layers)
+    # Rooms are read now, before anything is drawn: the tags written below are
+    # text too, and read afterwards they would be taken for room names.
+    found_rooms: list[dict] = []
+    if data.room_boundary_layers:
+        found_rooms, _labels, room_warnings = find_rooms(
+            msp, data.room_boundary_layers, data.room_label_layers, 0.0, mpu)
+        res.warnings.extend(room_warnings)
     by_system: dict[str, Counter[tuple[str, str]]] = defaultdict(Counter)
     blocks: dict[tuple[str, str], set[str]] = defaultdict(set)
     for hit in hits:
@@ -254,9 +261,7 @@ def takeoff_sheet(data: TakeoffSheetInput, storage: Storage | None = None) -> To
     # ---- rooms ---------------------------------------------------------------
     room_rows: list[dict] = []
     if data.room_boundary_layers:
-        rooms, _labels, warnings = find_rooms(msp, data.room_boundary_layers,
-                                              data.room_label_layers, 0.0, mpu)
-        res.warnings.extend(warnings)
+        rooms = found_rooms
         for n, room in enumerate(rooms, 1):
             pts = room["boundary"]
             hatch = msp.add_hatch(color=8, dxfattribs={"layer": ROOMS_LAYER})

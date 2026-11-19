@@ -35,8 +35,8 @@ export async function recordAudit(
       ${entry.action},
       ${entry.subjectType},
       ${entry.subjectId ?? null},
-      ${entry.before ? JSON.stringify(entry.before) : null},
-      ${entry.after ? JSON.stringify(entry.after) : null}
+      ${entry.before ? db.json(entry.before as postgres.JSONValue) : null},
+      ${entry.after ? db.json(entry.after as postgres.JSONValue) : null}
     )
   `;
 }

@@ -11,6 +11,7 @@ from .place import (place_devices, measure_route, SpacingRule, PlaceDevicesInput
 from .takeoff import (takeoff_sheet, TakeoffSheetInput, TAKEOFF_LAYER,
                       SCHEDULE_LAYER, ROOMS_LAYER)
 from .sheet import sheet_setup, SheetSetupInput, TitleBlock, SHEET_LAYER
+from .render import render_svg, RenderSvgInput, SVG_MIME
 from . import units
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "place_devices", "measure_route", "SpacingRule", "PlaceDevicesInput", "Obstruction", "units",
     "takeoff_sheet", "TakeoffSheetInput", "TAKEOFF_LAYER", "SCHEDULE_LAYER",
     "ROOMS_LAYER", "sheet_setup", "SheetSetupInput", "TitleBlock", "SHEET_LAYER",
+    "render_svg", "RenderSvgInput", "SVG_MIME",
 ]

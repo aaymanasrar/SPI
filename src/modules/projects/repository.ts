@@ -294,7 +294,7 @@ export async function upsertRequirement(
     insert into system_requirements
       (project_system_id, key, value, source, source_reference, created_by)
     values (
-      ${input.projectSystemId}, ${input.key}, ${JSON.stringify(input.value)},
+      ${input.projectSystemId}, ${input.key}, ${tx.json(input.value as postgres.JSONValue)},
       'manual', ${input.sourceReference}, ${input.createdBy}
     )
     on conflict (project_system_id, key) do update

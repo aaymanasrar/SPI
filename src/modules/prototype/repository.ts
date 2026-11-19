@@ -45,6 +45,16 @@ export async function recordDrawing(
   return rows[0];
 }
 
+/**
+ * jsonb columns are selected as ::text and parsed here. The pool's camelCase
+ * transform (lib/db.ts) also rewrites keys INSIDE json values, so bounds_m
+ * would arrive as boundsM and the viewer, which reads the engine's own keys,
+ * would find nothing.
+ */
+function parse<T>(text: string | null, fallback: T): T {
+  return text === null ? fallback : (JSON.parse(text) as T);
+}
+
 export async function listBuildingRuns(
   organizationId: string,
   projectId: string
@@ -64,9 +74,9 @@ export async function listBuildingRuns(
     }[]
   >`
     select o.id, o.tool, o.status, o.created_at, o.duration_ms, o.error,
-           o.output_json -> 'model' ->> 'project'                       as name,
-           jsonb_array_length(coalesce(o.output_json -> 'storeys', '[]'::jsonb)) as levels,
-           jsonb_array_length(coalesce(o.output_json -> 'spaces', '[]'::jsonb))  as rooms,
+           jsonb_unwrap(o.output_json) -> 'model' ->> 'project'         as name,
+           jsonb_array_length(coalesce(jsonb_unwrap(o.output_json) -> 'storeys', '[]'::jsonb)) as levels,
+           jsonb_array_length(coalesce(jsonb_unwrap(o.output_json) -> 'spaces', '[]'::jsonb))  as rooms,
            array(select d.filename from documents d
                   where d.id = any(o.input_document_ids) order by d.created_at) as files
       from craft_operations o
@@ -102,19 +112,25 @@ export async function getBuildingRun(
     {
       tool: string;
       status: string;
-      outputJson: unknown;
-      provenanceJson: unknown;
-      missingJson: unknown;
-      warningsJson: unknown;
-      assumptionsJson: unknown;
-      findingsJson: unknown;
+      outputJson: string | null;
+      provenanceJson: string | null;
+      missingJson: string | null;
+      warningsJson: string | null;
+      assumptionsJson: string | null;
+      findingsJson: string | null;
       error: string | null;
       engineVersion: string;
       durationMs: number | null;
     }[]
   >`
-    select tool, status, output_json, provenance_json, missing_json, warnings_json,
-           assumptions_json, findings_json, error, engine_version, duration_ms
+    select tool, status,
+           jsonb_unwrap(output_json)::text as output_json,
+           jsonb_unwrap(provenance_json)::text as provenance_json,
+           jsonb_unwrap(missing_json)::text as missing_json,
+           jsonb_unwrap(warnings_json)::text as warnings_json,
+           jsonb_unwrap(assumptions_json)::text as assumptions_json,
+           jsonb_unwrap(findings_json)::text as findings_json,
+           error, engine_version, duration_ms
       from craft_operations
      where id = ${operationId}
        and organization_id = ${organizationId}
@@ -127,12 +143,12 @@ export async function getBuildingRun(
     operation_id: operationId,
     tool: r.tool,
     status: r.status,
-    outputs: r.outputJson ?? {},
-    provenance: r.provenanceJson ?? [],
-    missing: r.missingJson ?? [],
-    warnings: r.warningsJson ?? [],
-    assumptions: r.assumptionsJson ?? [],
-    findings: r.findingsJson ?? [],
+    outputs: parse(r.outputJson, {}),
+    provenance: parse(r.provenanceJson, []),
+    missing: parse(r.missingJson, []),
+    warnings: parse(r.warningsJson, []),
+    assumptions: parse(r.assumptionsJson, []),
+    findings: parse(r.findingsJson, []),
     error: r.error,
     engine_version: r.engineVersion,
     duration_ms: r.durationMs,

@@ -35,6 +35,15 @@ export type RecordOperationInput = {
 
 export type CraftOperation = { id: string; createdAt: string };
 
+/**
+ * A value for a jsonb column. Passing JSON.stringify(x) instead sends text,
+ * which Postgres stores as a JSON *string* ("[]" rather than []), and every
+ * jsonb operator on it then fails or answers wrongly.
+ */
+function json(tx: postgres.TransactionSql, value: unknown) {
+  return tx.json(value as postgres.JSONValue);
+}
+
 export async function recordOperation(
   tx: postgres.TransactionSql,
   input: RecordOperationInput
@@ -49,12 +58,12 @@ export async function recordOperation(
     ) values (
       ${input.organizationId}, ${input.projectId}, ${input.engine}, ${input.tool},
       ${input.actorType}, ${input.actorId}, ${input.mode},
-      ${JSON.stringify(input.input ?? {})}, ${input.output === null ? null : JSON.stringify(input.output)},
+      ${json(tx, input.input ?? {})}, ${input.output === null ? null : json(tx, input.output)},
       ${input.inputDocumentIds}, ${input.outputDocumentIds},
-      ${JSON.stringify(input.provenance ?? [])}, ${JSON.stringify(input.missing ?? [])},
-      ${JSON.stringify(input.warnings ?? [])},
-      ${JSON.stringify(input.assumptions ?? [])},
-      ${JSON.stringify(input.findings ?? [])},
+      ${json(tx, input.provenance ?? [])}, ${json(tx, input.missing ?? [])},
+      ${json(tx, input.warnings ?? [])},
+      ${json(tx, input.assumptions ?? [])},
+      ${json(tx, input.findings ?? [])},
       ${input.status}, ${input.error},
       ${input.durationMs}, ${input.engineVersion}
     )

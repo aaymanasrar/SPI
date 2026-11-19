@@ -109,12 +109,20 @@ export default async function ProjectPage({
             {project.jurisdiction ? ` · ${project.jurisdiction}` : ""}
           </p>
         </div>
-        <Link
-          href={`/projects/${id}/building`}
-          className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-ink hover:brightness-110"
-        >
-          Building model →
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/projects/${id}/model`}
+            className="rounded-full border border-line-strong px-4 py-2 text-sm font-medium text-foreground hover:bg-white/5"
+          >
+            3D model &amp; drawings
+          </Link>
+          <Link
+            href={`/projects/${id}/building`}
+            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-ink hover:brightness-110"
+          >
+            Building model →
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">

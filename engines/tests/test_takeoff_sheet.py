@@ -193,3 +193,13 @@ def test_drawing_too_big_for_the_sheet_suggests_a_fit(storage):
     f = next(f for f in r.findings if f.code == "SHEET-DOES-NOT-FIT")
     assert f.severity == "review"
     assert r.outputs["suggestion"] == {"scale": 25, "paper_at_this_scale": "A2"}
+
+
+def test_room_names_are_not_taken_from_the_takeoffs_own_tags(storage):
+    # Labels from any text layer: the device tags the takeoff writes must not
+    # be read back as candidate room names.
+    r = takeoff_sheet(TakeoffSheetInput(document_id="d", storage_key="fp.dxf", symbol_map=FULL_MAP,
+                                        room_boundary_layers=["ROOM-BOUNDARY"],
+                                        output_key="out/t.dxf"), storage)
+    names = " ".join(x["name"] for x in r.outputs["rooms"])
+    assert "FA" not in names and "CC1" not in names

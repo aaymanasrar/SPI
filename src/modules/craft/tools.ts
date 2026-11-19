@@ -221,6 +221,26 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "bim.prototype": {
+    name: "bim.prototype",
+    engine: "bim",
+    previewPermission: "craft.preview",
+    // A proposed building from floor plans, for the simulator. Like scene_3d it
+    // writes nothing; every assumed height comes back as an assumption.
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "cad.render_svg": {
+    name: "cad.render_svg",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    // A picture of a drawing for the browser. Writes a new file; the DXF and
+    // every quantity in it are untouched.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   // cad.measure_route is deliberately absent. It is registered in the engine as
   // implemented=false and raises NotImplementedError; listing it here would
   // advertise it to the orchestrator as callable. See D-7.
