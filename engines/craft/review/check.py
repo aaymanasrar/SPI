@@ -32,7 +32,7 @@ from ..cad.read_dxf import open_dxf
 from ..core import (ENGINE_VERSION, Finding, InvalidInput, MissingItem, OutputFile, Storage,
                     ToolResult, register, sha256)
 from ..grid.reader import ReadClientBoqInput, read_client_boq
-from . import vocab
+from . import ai, vocab
 from .drawing import DETECTORS, compare, review_drawing
 from .spec import read_spec_bytes
 
@@ -62,6 +62,9 @@ class CheckInput(BaseModel):
     layers: list[str] | None = Field(None, description="count only inserts on these layers")
     device_rules: dict | None = Field(None, description="SPI rules to recommend with; omitted: no recommendation")
     storey_height_m: float | None = Field(None, gt=1.5, lt=20)
+    ai_read_specs: bool = Field(False, description="also have the configured language model read the "
+                                                   "specs (SPI_AI_* on the engine); its readings are checked "
+                                                   "against the clause text before use")
     output_key: str | None = None
     output_name: str = Field("review.xlsx", pattern=r"^[\w.-]+\.xlsx$")
     markup_key: str | None = None
@@ -76,8 +79,13 @@ def _issue(issues: list, code: str, severity: str, title: str, detail: str, acti
                    "action": action, "sources": sources})
 
 
+READ_BY = {"rules": "", "both": " · read by rules and AI"}
+
+
 def _spec_src(r: dict, spec_names: dict) -> dict:
     where = f"clause {r['clause']}, {r['location']}" if r.get("clause") else r["location"]
+    by = r.get("read_by", "rules")
+    where += READ_BY.get(by, f" · read by AI only ({by.split(':', 1)[-1]}) — check it")
     return {"doc": "spec", "name": spec_names.get(r["spec_id"], "specification"), "ref": where,
             "text": r["text"][:400]}
 
@@ -138,6 +146,7 @@ def check(data: CheckInput, storage: Storage | None = None) -> ToolResult:
 
     # ---- specs ------------------------------------------------------------------
     reqs: list[dict] = []
+    ai_runs: list[dict] = []
     spec_names: dict[str, str] = {}
     for s in data.specs:
         name = s.filename or s.storage_key
@@ -146,7 +155,24 @@ def check(data: CheckInput, storage: Storage | None = None) -> ToolResult:
         if out["pages_without_text_layer"] and len(out["pages_without_text_layer"]) == out["pages_read"]:
             res.missing.append(MissingItem(field="text_layer", record=f"document:{s.document_id}",
                                            note=f"{name} has no text layer (a scan); it was not read."))
-        for r in out["requirements"]:
+        found = [{**r, "read_by": "rules"} for r in out["requirements"]]
+        if data.ai_read_specs:
+            got = ai.read_clauses(out["clauses"])
+            if got["run"] is None:
+                not_checked.append({"what": f"{name}: AI reading",
+                                    "why": "no model is configured on the engine (SPI_AI_PROVIDER)"})
+            else:
+                ai_runs.append({"spec": name, **got["run"]})
+                found = ai.merge(out["requirements"], got["requirements"])
+                for e in got["run"]["errors"]:
+                    not_checked.append({"what": f"{name}: AI reading {e.split(':')[0]}",
+                                        "why": "the model did not answer: " + e.split(":", 1)[1].strip()[:160]})
+                for x in got["rejected"]:
+                    not_checked.append({"what": f"{name}: AI reading of {x.get('clause')} "
+                                                f"({x.get('kind')} {x.get('device_type') or ''}): "
+                                                f"“{(x.get('quote') or '')[:80]}”",
+                                        "why": f"refused — {x['why']}"})
+        for r in found:
             reqs.append({**r, "spec_id": s.document_id})
         not_checked.append({"what": f"{name}: {out['clause_count']} clauses read, "
                                     f"{out['requiring_clauses']} with 'shall/provide', "
@@ -227,6 +253,7 @@ def check(data: CheckInput, storage: Storage | None = None) -> ToolResult:
         "client_boq": boq_rows,
         "recommended_positions": dr["recommended"] if dr else [],
         "symbol_map": dr["symbol_map"] if dr else None,
+        "spec_reader": {"rules": True, "ai": ai_runs},
         "markup_layer": RECOMMEND_LAYER,
     }
     # Each contradiction is a finding too, so every screen that lists findings shows it.
@@ -379,7 +406,8 @@ def _spec_vs_drawing(issues: list, not_checked: list, reqs: list, names: dict, d
                                             if (d["system"], d["device_type"]) == key), "")}])
         elif r["kind"] == "coverage" and r["device_type"]:
             scope = [x for x in rooms.values()
-                     if "all" in r["rooms"] or x["type"] in r["rooms"]]
+                     if ("all" in r["rooms"] or x["type"] in r["rooms"])
+                     and x["type"] not in (r.get("except_rooms") or [])]
             if not scope:
                 not_checked.append({"what": f"{src['ref']}: {vocab.label(r['device_type'])} in "
                                             f"{', '.join(r['rooms'])}",
@@ -597,10 +625,11 @@ def _workbook(data, boq_lines, room_lines, dr, reqs, names, boq_rows, issues, no
               [[vocab.label(x["device_type"]), rooms.get(x["room_id"], "—"), x["x_m"], x["y_m"], x["z_m"],
                 x["rule"], x["basis"]] for x in dr["recommended"]], [20, 20, 9, 9, 10, 28, 80])
     if reqs:
-        sheet("Spec requirements", ["Spec", "Clause", "Where", "Kind", "System", "Device", "Value", "Clause text"],
-              [[names.get(r["spec_id"]), r.get("clause"), r["location"], r["kind"],
+        sheet("Spec requirements", ["Spec", "Clause", "Where", "Read by", "Kind", "System", "Device", "Value",
+                                    "Clause text"],
+              [[names.get(r["spec_id"]), r.get("clause"), r["location"], r.get("read_by", "rules"), r["kind"],
                 (r.get("system") or "").replace("_", " "), vocab.label(r["device_type"]) if r.get("device_type") else "",
-                _value(r), r["text"]] for r in reqs], [22, 8, 10, 12, 14, 18, 22, 90])
+                _value(r), r["text"]] for r in reqs], [22, 8, 10, 16, 12, 14, 18, 22, 90])
     if boq_rows:
         sheet("Client BOQ", ["Row", "Description", "Unit", "Qty", "Read as", "Attributes"],
               [[r["source_row"], r["description"], r["unit"], r["quantity"],
@@ -619,7 +648,8 @@ def _value(r: dict) -> str:
     if r["kind"] == "rate":
         return f"{r['value']} per {r['per']}"
     if r["kind"] == "coverage":
-        return "in " + ", ".join(r["rooms"])
+        return "in " + ", ".join(r["rooms"]) + (
+            f" except {', '.join(r['except_rooms'])}" if r.get("except_rooms") else "")
     if r["kind"] == "height":
         return f"{r['value']} m AFF"
     if r["kind"] == "attribute":

@@ -25,6 +25,7 @@ const schema = z.object({
   deviceLayers: optionalText,
   storeyHeight: optionalNumber,
   useRules: z.boolean(),
+  useAi: z.boolean(),
 });
 
 const ext = (name: string) => path.extname(name).toLowerCase();
@@ -44,6 +45,7 @@ export async function runReviewAction(
       deviceLayers: (formData.get("deviceLayers") as string) ?? "",
       storeyHeight: (formData.get("storeyHeight") as string) ?? "",
       useRules: formData.get("useRules") === "on",
+      useAi: formData.get("useAi") === "on",
     });
     if (!parsed.drawingId && parsed.specIds.length === 0 && !parsed.boqId) {
       return { ok: false, error: "Choose at least a drawing, a specification or a BOQ." };
@@ -85,11 +87,12 @@ export async function runReviewAction(
       layers: parsed.deviceLayers ? parsed.deviceLayers.split(",").map((s) => s.trim()).filter(Boolean) : null,
       device_rules: parsed.useRules ? DEVICE_RULES : null,
       storey_height_m: parsed.storeyHeight,
+      ai_read_specs: parsed.useAi,
       output_key: outputKey(session.organizationId, parsed.projectId, `${name}.xlsx`),
       output_name: `${name}.xlsx`,
       markup_key: outputKey(session.organizationId, parsed.projectId, `${name}_recommended.dxf`),
       markup_name: `${name}_recommended.dxf`,
-    }, ids, 180_000);
+    }, ids, parsed.useAi ? 900_000 : 180_000);
 
     if (run.result.status === "error" || run.result.status === "invalid_input") {
       return { ok: false, error: failure("review.check", run.result) };

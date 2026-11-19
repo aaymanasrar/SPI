@@ -111,6 +111,23 @@ async function call<T>(
   }
 }
 
+export type EngineHealth = {
+  status: string;
+  engine_version: string;
+  tools: number;
+  /** The language model that reads specs, when one is configured. */
+  ai: { provider: string; model: string; skill_version: string } | null;
+};
+
+/** The engine's own report of itself; null when it does not answer. */
+export async function engineHealth(): Promise<EngineHealth | null> {
+  try {
+    return await call<EngineHealth>("health", "/health", undefined, 3000);
+  } catch {
+    return null;
+  }
+}
+
 /** The schemas the AI orchestrator plans against. It sees nothing else. */
 export async function listTools(): Promise<ToolSchema[]> {
   return call<ToolSchema[]>("tools", "/tools");

@@ -200,7 +200,7 @@ def read_spec_bytes(raw: bytes, name: str, max_pages: int = 200) -> dict:
     for c in clauses:
         reqs += requirements_of(c)
     return {"pages_read": pages, "pages_without_text_layer": no_text,
-            "clause_count": len(clauses),
+            "clause_count": len(clauses), "clauses": clauses,
             "requiring_clauses": sum(1 for c in clauses if REQUIRE.search(c["text"])),
             "requirements": reqs}
 
@@ -216,7 +216,7 @@ def read_spec(data: ReadSpecInput, storage: Storage | None = None) -> ToolResult
         raise InvalidInput("review.read_spec needs storage to fetch the document")
     out = read_spec_bytes(storage.read(data.storage_key), data.filename or data.storage_key,
                           data.max_pages)
-    res.outputs = out
+    res.outputs = {k: v for k, v in out.items() if k != "clauses"}
     if out["pages_without_text_layer"] and len(out["pages_without_text_layer"]) == out["pages_read"]:
         res.status = "missing_data"
         res.missing = [MissingItem(field="text_layer", record=f"document:{data.document_id}",

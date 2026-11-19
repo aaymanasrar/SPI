@@ -30,8 +30,13 @@ class ToolCall(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
+    from .review import ai
+    cfg = ai.config()
     return {"status": "ok", "engine_version": ENGINE_VERSION,
-            "tools": len(TOOL_REGISTRY)}
+            "tools": len(TOOL_REGISTRY),
+            # Which language model reads specs, if any. Never a key or a secret.
+            "ai": {"provider": cfg["provider"], "model": cfg["model"],
+                   "skill_version": ai.skill()[1]} if cfg else None}
 
 
 @app.get("/tools")

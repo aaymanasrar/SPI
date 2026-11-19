@@ -145,6 +145,20 @@ export default async function ReviewResultPage({ params }: { params: Promise<{ i
             ))}
           </div>
 
+          {o.spec_reader && o.spec_reader.ai.length > 0 && (
+            <div className="glass rounded-2xl px-5 py-3 text-xs text-muted">
+              <span className="text-foreground">Specs read by the rule reader and AI.</span>{" "}
+              {o.spec_reader.ai.map((a) => (
+                <span key={a.spec} className="mr-3">
+                  {a.spec}: {a.model} (skill {a.skill_version}) — {a.clauses_sent} clauses, {a.accepted} readings kept,{" "}
+                  <span className={a.rejected ? "text-warn" : ""}>{a.rejected} refused</span>
+                  {a.errors.length > 0 && <span className="text-danger">, {a.errors.length} batch(es) failed</span>}, {a.seconds}s.
+                </span>
+              ))}
+              Refused readings are under “Not checked”. A source marked “AI only” was not found by the rule reader — check it.
+            </div>
+          )}
+
           <Card title="BOQ" description="Drawn on the plan, recommended by SPI's rules, stated in the spec, priced in the client BOQ. Hover 'why' for the rule.">
             {o.boq.length === 0 ? <Empty>Nothing to list.</Empty> : (
               <div className="overflow-x-auto">

@@ -18,4 +18,9 @@ services:
       - ./out/storage:/data
     environment:
       CRAFT_STORAGE_ROOT: /data
+      # AI spec reading: point at the Ollama on the host or a model server.
+      # Empty provider = rule reader only.
+      SPI_AI_PROVIDER: ${SPI_AI_PROVIDER:-none}
+      SPI_AI_URL: ${SPI_AI_URL:-http://host.docker.internal:11434}
+      SPI_AI_MODEL: ${SPI_AI_MODEL:-}
     restart: unless-stopped

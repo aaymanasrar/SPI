@@ -5,6 +5,7 @@ import { getProject } from "@/modules/projects/repository";
 import { listProjectFiles } from "@/modules/model/repository";
 import { listReviews } from "@/modules/review/repository";
 import { runReviewAction } from "@/modules/review/actions";
+import { engineHealth } from "@/modules/craft/client";
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, Select, Pill, Empty, NoPermission } from "@/components/ui";
 
@@ -14,10 +15,12 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const project = await getProject(session.organizationId, id);
   if (!project) notFound();
   const mayRun = session.permissions.has("craft.commit");
-  const [files, runs] = await Promise.all([
+  const [files, runs, engine] = await Promise.all([
     listProjectFiles(session.organizationId, id),
     session.permissions.has("craft.preview") ? listReviews(session.organizationId, id) : Promise.resolve([]),
+    engineHealth(),
   ]);
+  const aiModel = engine?.ai ?? null;
   const uploads = files.filter((f) => f.kind === "uploaded");
   const dxfs = uploads.filter((f) => f.classification === "drawing" && /\.dxf$/i.test(f.filename));
   const specs = uploads.filter((f) => f.classification === "specification");
@@ -84,6 +87,18 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
                     <span className="block text-xs text-faint">
                       Smoke detection, call points, sounder-strobes, access control and data outlets, each
                       citing its rule. Cameras and access points have no placement rule and are not recommended.
+                    </span>
+                  </span>
+                </label>
+                <label className={`flex items-start gap-2 text-sm ${aiModel ? "text-foreground" : "text-faint"}`}>
+                  <input type="checkbox" name="useAi" disabled={!aiModel} defaultChecked={!!aiModel && specs.length > 0}
+                    className="mt-1 accent-[var(--accent)]" />
+                  <span>
+                    Also read the specs with AI{aiModel ? ` (${aiModel.model})` : ""}
+                    <span className="block text-xs text-faint">
+                      {aiModel
+                        ? "Every reading must quote its clause word for word, or it is refused and listed. Runs on SPI's own server; specs do not leave it. Slower: minutes on a laptop."
+                        : "No model is set up on the engine (SPI_AI_PROVIDER). Only the rule reader runs."}
                     </span>
                   </span>
                 </label>

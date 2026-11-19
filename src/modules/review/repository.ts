@@ -50,6 +50,11 @@ export type ReviewOutputs = {
   rooms: ReviewRoomLine[];
   issues: ReviewIssue[];
   not_checked: { what: string; why: string }[];
+  spec_reader?: {
+    rules: boolean;
+    ai: { spec: string; provider: string; model: string; skill_version: string; clauses_sent: number;
+          accepted: number; rejected: number; errors: string[]; seconds: number }[];
+  };
 };
 
 export type ReviewRun = {

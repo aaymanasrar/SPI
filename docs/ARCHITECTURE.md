@@ -435,6 +435,16 @@ and system instructions; some models spend their output budget on internal reaso
 structured output unless explicitly configured. Model IDs belong in configuration, never in code,
 and every call records provider, model and prompt version in `extraction_runs`.
 
+**First implementation: spec reading (engines/craft/review/ai.py).** One adapter, configured on the
+engine by `SPI_AI_PROVIDER` / `SPI_AI_URL` / `SPI_AI_MODEL`; Ollama today, so the model runs on SPI's
+own server and client specifications do not leave it. The instructions are a skill file
+(`review/skill/spec_reader.md`) whose hash is recorded with every run. A reading is kept only if its
+clause id was sent, its quote is in that clause word for word, its names are from the fixed lists and
+any number it gives is in its quote; refused readings are listed with the reason. The rule reader
+always runs too, and every requirement says who read it (`rules`, `both`, or `ai:<model>`), so an
+AI-only reading is visibly one to check. Model choice is by score on a test set of real clauses, not
+by reputation.
+
 ### 8.4 No-guess enforcement (§10.3)
 
 Prompt-level instruction is necessary but insufficient — the previous build proved a model will
