@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-/* Shared presentational primitives. Dense and plain by intent — this is an
-   engineering tool, so legibility of numbers and status matters more than
-   decoration. */
+/* Shared presentational primitives. Dense by intent — this is an engineering
+   tool, so legibility of numbers and status matters more than decoration. The
+   look (glass panels, gold accent) lives in globals.css tokens. */
 
 export function Card({
   title,
@@ -16,28 +16,29 @@ export function Card({
   children?: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="glass rounded-2xl">
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-3.5 dark:border-slate-800">
+        <header className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
           <div>
             {title && (
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <h2 className="text-[15px] font-medium tracking-tight text-foreground">
                 {title}
               </h2>
             )}
             {description && (
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                {description}
-              </p>
+              <p className="mt-0.5 text-xs text-muted">{description}</p>
             )}
           </div>
           {actions}
         </header>
       )}
-      <div className="px-5 py-4">{children}</div>
+      <div className="px-5 pb-5 pt-1">{children}</div>
     </section>
   );
 }
+
+const inputClass =
+  "w-full rounded-lg border border-line-strong bg-black/25 px-3 py-2 text-sm text-foreground outline-none placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 export function Field({
   label,
@@ -62,9 +63,9 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+      <span className="mb-1 block text-xs font-medium text-muted">
         {label}
-        {required && <span className="ml-0.5 text-rose-600">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
       {children ?? (
         <input
@@ -74,14 +75,10 @@ export function Field({
           placeholder={placeholder}
           defaultValue={defaultValue ?? undefined}
           step={step}
-          className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          className={inputClass}
         />
       )}
-      {hint && (
-        <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-          {hint}
-        </span>
-      )}
+      {hint && <span className="mt-1 block text-xs text-faint">{hint}</span>}
     </label>
   );
 }
@@ -103,11 +100,7 @@ export function Select({
 }) {
   return (
     <Field label={label} hint={hint}>
-      <select
-        name={name}
-        defaultValue={defaultValue ?? ""}
-        className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-      >
+      <select name={name} defaultValue={defaultValue ?? ""} className={inputClass}>
         {includeBlank !== undefined && <option value="">{includeBlank}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -120,21 +113,25 @@ export function Select({
 }
 
 const statusTone: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  active: "bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300",
-  on_hold: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
-  completed: "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300",
-  archived: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500",
-  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
-  approved: "bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300",
-  rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300",
-  not_required: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  draft: "bg-white/8 text-muted",
+  active: "bg-leaf-soft text-leaf",
+  on_hold: "bg-warn/15 text-warn",
+  completed: "bg-accent-soft text-accent",
+  archived: "bg-white/5 text-faint",
+  pending: "bg-warn/15 text-warn",
+  approved: "bg-leaf-soft text-leaf",
+  rejected: "bg-danger/15 text-danger",
+  not_required: "bg-white/8 text-muted",
+  ok: "bg-leaf-soft text-leaf",
+  missing_data: "bg-warn/15 text-warn",
+  invalid_input: "bg-danger/15 text-danger",
+  error: "bg-danger/15 text-danger",
 };
 
 export function Pill({ value }: { value: string }) {
   return (
     <span
-      className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
+      className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
         statusTone[value] ?? statusTone.draft
       }`}
     >
@@ -144,11 +141,7 @@ export function Pill({ value }: { value: string }) {
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return (
-    <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-      {children}
-    </p>
-  );
+  return <p className="py-6 text-center text-sm text-muted">{children}</p>;
 }
 
 export function Table({
@@ -162,20 +155,18 @@ export function Table({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left dark:border-slate-800">
+          <tr className="border-b border-line text-left">
             {head.map((h) => (
               <th
                 key={h}
-                className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                className="px-2 py-2 text-[11px] font-medium uppercase tracking-wider text-faint"
               >
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {children}
-        </tbody>
+        <tbody className="divide-y divide-line">{children}</tbody>
       </table>
     </div>
   );
@@ -183,11 +174,9 @@ export function Table({
 
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-md border border-slate-200 px-3 py-2 dark:border-slate-800">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {label}
-      </div>
-      <div className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+    <div className="rounded-xl border border-line bg-surface-2 px-3 py-2.5">
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className="mt-0.5 text-xl font-light tabular-nums text-foreground">
         {value}
       </div>
     </div>
@@ -197,7 +186,7 @@ export function Stat({ label, value }: { label: string; value: ReactNode }) {
 /** Shown where a permission is missing, instead of silently hiding a feature. */
 export function NoPermission({ what }: { what: string }) {
   return (
-    <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+    <p className="rounded-lg border border-dashed border-line-strong px-3 py-2 text-xs text-muted">
       Your role does not allow {what}.
     </p>
   );

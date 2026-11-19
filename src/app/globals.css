@@ -1,26 +1,88 @@
 @import "tailwindcss";
 
+/* The app is dark-only: the dashboard is built around glass panels on a deep
+   green ground. Existing pages written with `dark:` classes keep working because
+   the dark variant is bound to the `.dark` class set on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #08100b;
+  --foreground: #e7eee4;
+
+  --surface: rgb(21 33 25 / 0.72);
+  --surface-2: rgb(30 46 35 / 0.7);
+  --surface-3: rgb(42 61 47 / 0.6);
+  --line: rgb(190 222 190 / 0.09);
+  --line-strong: rgb(190 222 190 / 0.18);
+  --muted: #8ea392;
+  --faint: #5f7564;
+  --accent: #e4bb5e;
+  --accent-soft: rgb(228 187 94 / 0.16);
+  --accent-ink: #201705;
+  --leaf: #7cc58d;
+  --leaf-soft: rgb(124 197 141 / 0.16);
+  --warn: #e9a14b;
+  --danger: #e2786a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-leaf: var(--leaf);
+  --color-leaf-soft: var(--leaf-soft);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background:
+    radial-gradient(1200px 700px at 85% -10%, rgb(64 104 66 / 0.35), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgb(40 78 52 / 0.35), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Frosted panel used by every card on the dashboard. */
+.glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 40%), var(--surface);
+  border: 1px solid var(--line);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 20px 40px -24px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+/* Drafting grid behind the building canvas. */
+.blueprint {
+  background-color: #0c1a12;
+  background-image:
+    linear-gradient(rgb(124 197 141 / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(124 197 141 / 0.07) 1px, transparent 1px),
+    linear-gradient(rgb(124 197 141 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(124 197 141 / 0.035) 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
 }
