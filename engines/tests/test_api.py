@@ -24,7 +24,7 @@ def test_health_reports_the_whole_registry():
 
 def test_every_engine_is_registered_on_the_http_surface():
     names = {t["name"] for t in client.get("/tools").json()}
-    assert {n.split(".")[0] for n in names} == {"grid", "pdf", "cad", "word", "bim"}
+    assert {n.split(".")[0] for n in names} == {"grid", "pdf", "cad", "word", "bim", "review"}
     assert names == set(TOOL_REGISTRY)
 
 

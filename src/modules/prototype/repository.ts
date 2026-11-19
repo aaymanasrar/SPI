@@ -30,6 +30,8 @@ export async function recordDrawing(
     checksumSha256: string;
     storageKey: string;
     uploadedBy: string;
+    /** drawing (default), specification or boq. */
+    classification?: "drawing" | "specification" | "boq";
   }
 ): Promise<{ id: string }> {
   const rows = await tx<{ id: string }[]>`
@@ -39,7 +41,7 @@ export async function recordDrawing(
     ) values (
       ${input.organizationId}, ${input.projectId}, ${input.filename},
       ${input.contentType}, ${input.byteSize}, ${input.checksumSha256},
-      ${input.storageKey}, 'drawing'::doc_classification, ${input.uploadedBy}
+      ${input.storageKey}, ${input.classification ?? "drawing"}::doc_classification, ${input.uploadedBy}
     )
     returning id`;
   return rows[0];

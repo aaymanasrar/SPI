@@ -241,6 +241,27 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "review.read_spec": {
+    name: "review.read_spec",
+    engine: "review",
+    previewPermission: "craft.preview",
+    // Reads clauses into requirement statements. They are proposals that cite
+    // their clause; nothing is written.
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "review.check": {
+    name: "review.check",
+    engine: "review",
+    previewPermission: "craft.preview",
+    // Writes a review workbook and a marked-up drawing. Its recommended
+    // quantities are rule proposals and its contradictions are for an engineer
+    // to resolve; the AI may run one, a person keeps or issues it.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   // cad.measure_route is deliberately absent. It is registered in the engine as
   // implemented=false and raises NotImplementedError; listing it here would
   // advertise it to the orchestrator as callable. See D-7.

@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -8,13 +7,11 @@ import { sql, transaction } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { recordAudit } from "@/lib/audit";
 import { runAction, optionalText, optionalNumber, type ActionState } from "@/lib/action";
-import type { Session } from "@/lib/auth";
 import { getProject } from "@/modules/projects/repository";
 import * as craftRepo from "@/modules/craft/repository";
-import { policyFor } from "@/modules/craft/tools";
-import { runTool, type CraftResult } from "@/modules/craft/client";
 import { recordDrawing } from "@/modules/prototype/repository";
-import { saveUpload, storageRoot, MAX_FILE_BYTES } from "@/modules/prototype/storage";
+import { saveUpload, MAX_FILE_BYTES, DRAWING_TYPES } from "@/modules/prototype/storage";
+import { runAndRecord, failure, outputKey, renderPreview } from "./run";
 import { getProjectDocuments, type StoredDocument } from "./repository";
 import { DEVICE_RULES } from "./viewer-assets.generated";
 
@@ -27,120 +24,8 @@ import { DEVICE_RULES } from "./viewer-assets.generated";
  * its own operation, so every file can be traced to the run that made it.
  */
 
-const CLASSIFICATION: Record<string, string> = {
-  "application/dxf": "drawing",
-  "image/vnd.dxf": "drawing",
-  "image/svg+xml": "drawing",
-};
-
 const PLAN_EXT = new Set([".dxf", ".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"]);
 const ext = (name: string) => path.extname(name).toLowerCase();
-
-function outputKey(organizationId: string, projectId: string, name: string): string {
-  return path.posix.join("org", organizationId, "project", projectId, "outputs",
-    `${randomUUID()}-${name}`);
-}
-
-type Recorded = {
-  operationId: string;
-  result: CraftResult;
-  documents: { id: string; storageKey: string; name: string }[];
-};
-
-async function runAndRecord(
-  session: Session,
-  projectId: string,
-  tool: string,
-  mode: "preview" | "commit",
-  input: Record<string, unknown>,
-  inputDocumentIds: string[],
-  timeoutMs?: number
-): Promise<Recorded> {
-  const policy = policyFor(tool);
-  // --- outside the transaction, deliberately ---
-  const result = await runTool(tool, {
-    mode,
-    input,
-    storageRoot: storageRoot(),
-    // A takeoff with unmapped blocks, or a model with uncounted elements, is
-    // still worth showing: the gaps are listed with it, not hidden.
-    acceptMissingData: true,
-    timeoutMs,
-  });
-  return transaction(async (tx) => {
-    const op = await craftRepo.recordOperation(tx, {
-      organizationId: session.organizationId,
-      projectId,
-      engine: policy.engine,
-      tool,
-      actorType: "user",
-      actorId: session.userId,
-      mode,
-      input,
-      output: result.outputs,
-      inputDocumentIds,
-      outputDocumentIds: [],
-      provenance: result.provenance,
-      missing: result.missing,
-      warnings: result.warnings,
-      assumptions: result.assumptions ?? [],
-      findings: result.findings ?? [],
-      status: result.status,
-      error:
-        result.status === "error"
-          ? result.error || result.warnings.join("; ") || "Engine error"
-          : null,
-      durationMs: result.duration_ms,
-      engineVersion: result.engine_version,
-    });
-    const documents: Recorded["documents"] = [];
-    for (const f of result.files) {
-      if (!f.storage_key) continue;
-      const doc = await craftRepo.recordOutputDocument(tx, {
-        organizationId: session.organizationId,
-        projectId,
-        filename: f.name,
-        contentType: f.mime,
-        byteSize: f.byte_size,
-        checksumSha256: f.sha256,
-        storageKey: f.storage_key,
-        classification: CLASSIFICATION[f.mime] ?? "other",
-        uploadedBy: session.userId,
-        sourceOperationId: op.id,
-      });
-      documents.push({ id: doc.id, storageKey: f.storage_key, name: f.name });
-    }
-    await recordAudit(
-      session,
-      {
-        action: `craft.${mode}`,
-        subjectType: "craft_operation",
-        subjectId: op.id,
-        after: { tool, status: result.status, documentIds: documents.map((d) => d.id) },
-      },
-      tx
-    );
-    return { operationId: op.id, result, documents };
-  });
-}
-
-/** Why a run produced nothing usable, in words a person can act on. */
-function failure(tool: string, r: CraftResult): string {
-  if (r.status === "error") return `${tool} failed: ${r.error ?? "engine error"}`;
-  if (r.status === "invalid_input") return `${tool} could not read the input: ${r.warnings.join("; ")}`;
-  const missing = r.missing.map((m) => m.note || `${m.record}.${m.field}`).join(" ");
-  return `${tool} needs more information: ${missing}`;
-}
-
-async function renderPreview(session: Session, projectId: string, doc: { id: string; storageKey: string; name: string }) {
-  const name = `${path.basename(doc.name, path.extname(doc.name)).replace(/[^\w.-]+/g, "_")}.svg`;
-  return runAndRecord(session, projectId, "cad.render_svg", "commit", {
-    document_id: doc.id,
-    storage_key: doc.storageKey,
-    output_key: outputKey(session.organizationId, projectId, name),
-    output_name: name,
-  }, [doc.id]);
-}
 
 // ---------------------------------------------------------------- upload
 
@@ -158,6 +43,18 @@ export async function uploadDrawingAction(
     if (files.length === 0) return { ok: false, error: "Choose at least one file." };
     const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
     if (tooBig) return { ok: false, error: `${tooBig.name} is larger than 150 MB.` };
+    const unknown = files.find((f) => !DRAWING_TYPES[ext(f.name)]);
+    if (unknown) {
+      return { ok: false, error: `${unknown.name}: accepted are ${Object.keys(DRAWING_TYPES).join(", ")}.` };
+    }
+    const kind = z.enum(["auto", "drawing", "specification", "boq"]).parse(formData.get("kind") ?? "auto");
+    // What a file is: said by the person, else read from its type. A PDF is a
+    // drawing unless they say it is a specification.
+    const classify = (name: string): "drawing" | "specification" | "boq" =>
+      kind !== "auto" ? kind
+        : ext(name) === ".xlsx" ? "boq"
+        : ext(name) === ".docx" || ext(name) === ".txt" ? "specification"
+        : "drawing";
 
     const saved: { id: string; storageKey: string; name: string }[] = [];
     for (const file of files) {
@@ -172,12 +69,14 @@ export async function uploadDrawingAction(
           checksumSha256: stored.sha256,
           storageKey: stored.storageKey,
           uploadedBy: session.userId,
+          classification: classify(stored.filename),
         });
         await recordAudit(session, {
           action: "document.upload",
           subjectType: "document",
           subjectId: d.id,
-          after: { filename: stored.filename, byteSize: stored.byteSize, sha256: stored.sha256 },
+          after: { filename: stored.filename, byteSize: stored.byteSize, sha256: stored.sha256,
+                   classification: classify(stored.filename) },
         }, tx);
         return d;
       });

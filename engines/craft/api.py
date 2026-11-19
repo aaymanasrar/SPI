@@ -16,7 +16,7 @@ from .core import (ENGINE_VERSION, InvalidInput, LocalStorage, MissingData,
                    TOOL_REGISTRY, ToolResult, ToolUnavailable, tool_schemas)
 # Importing craft registers every engine's tools; importing one engine would
 # serve a registry missing the others.
-from . import grid, pdf, cad, word, bim  # noqa: F401  (registration side-effect)
+from . import grid, pdf, cad, word, bim, review  # noqa: F401  (registration side-effect)
 
 app = FastAPI(title="SPI Craft Engines", version=ENGINE_VERSION)
 

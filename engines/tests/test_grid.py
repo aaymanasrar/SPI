@@ -362,3 +362,14 @@ def test_missing_identifiers_do_not_cost_the_line_its_provenance(store):
     sources = [p.source for p in r.provenance]
     assert "cad.count_devices on L01.dxf" in sources
     assert any(s.startswith("price_source:") for s in sources)
+
+
+def test_read_client_boq_prefers_description_over_item_number(store, tmp_path):
+    # Most client BOQs have an "Item" number column before "Description". Both
+    # are description synonyms; the more specific one must win.
+    p = _client_workbook(tmp_path / "numbered.xlsx", ["Item", "Description", "Unit", "Qty"],
+                         [["1", "Smoke detector", "no", 40], ["2", "Call point", "no", 6]])
+    res = read_client_boq(ReadClientBoqInput(document_id="d", storage_key=p.name),
+                          storage=LocalStorage(tmp_path))
+    assert res.outputs["column_map"]["description"] == 2
+    assert [r["description"] for r in res.outputs["rows"]] == ["Smoke detector", "Call point"]

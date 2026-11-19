@@ -25,6 +25,10 @@ export const DRAWING_TYPES: Record<string, string> = {
   ".tif": "image/tiff",
   ".tiff": "image/tiff",
   ".ifc": "application/x-step",
+  // Specifications and BOQs, checked against the drawings (engines/craft/review).
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".txt": "text/plain",
 };
 
 export const MAX_FILE_BYTES = 150 * 1024 * 1024;
@@ -51,7 +55,7 @@ export async function saveUpload(
   const filename = safeName(file.name);
   const ext = path.extname(filename).toLowerCase();
   const contentType = DRAWING_TYPES[ext];
-  if (!contentType) throw new Error(`${file.name}: not a drawing type this can read`);
+  if (!contentType) throw new Error(`${file.name}: not a file type this can read`);
   const bytes = Buffer.from(await file.arrayBuffer());
   // Keys are made here, never taken from the request, so a filename cannot
   // reach outside the storage root.

@@ -19,6 +19,7 @@ const KIND_LABEL: Record<ProjectFile["kind"], string> = {
   takeoff: "Takeoff",
   sheet: "Shop drawing",
   preview: "Preview",
+  review: "Review",
   other: "Engine output",
 };
 
@@ -45,8 +46,9 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
   ]);
 
   // Pictures are shown on the file they depict, not listed on their own.
-  const drawings = files.filter((f) => f.kind !== "preview" && /\.(dxf|ifc|pdf|png|jpe?g|tiff?)$/i.test(f.filename));
-  const uploads = files.filter((f) => f.kind === "uploaded").reverse(); // oldest first
+  const drawings = files.filter((f) => f.kind !== "preview" && f.classification === "drawing"
+    && /\.(dxf|ifc|pdf|png|jpe?g|tiff?)$/i.test(f.filename));
+  const uploads = files.filter((f) => f.kind === "uploaded" && f.classification === "drawing").reverse(); // oldest first
   const dxfs = drawings.filter((f) => /\.dxf$/i.test(f.filename) && f.kind === "uploaded");
   const today = new Date().toISOString().slice(0, 10);
 
@@ -189,19 +191,29 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card title="Upload" description="DXF, PDF or image floor plans, or an IFC model from Revit. Up to 150 MB each.">
+        <Card title="Upload" description="Floor plans (DXF, PDF, image), an IFC model, specifications (PDF, DOCX, TXT) or a client BOQ (XLSX). Up to 150 MB each.">
           {!mayUpload ? (
             <NoPermission what="uploading documents" />
           ) : (
             <ActionForm action={uploadDrawingAction} submitLabel="Upload" resetOnSuccess>
               <input type="hidden" name="projectId" value={id} />
+              <Select
+                label="These files are"
+                name="kind"
+                options={[
+                  { value: "auto", label: "Decide by file type (PDF = drawing)" },
+                  { value: "drawing", label: "Drawings" },
+                  { value: "specification", label: "Specifications" },
+                  { value: "boq", label: "Client BOQ" },
+                ]}
+              />
               <Field label="Files">
                 <input
                   type="file"
                   name="files"
                   multiple
                   required
-                  accept=".dxf,.ifc,.pdf,.png,.jpg,.jpeg,.tif,.tiff"
+                  accept=".dxf,.ifc,.pdf,.png,.jpg,.jpeg,.tif,.tiff,.docx,.xlsx,.txt"
                   className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-foreground"
                 />
               </Field>

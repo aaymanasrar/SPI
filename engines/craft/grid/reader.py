@@ -16,6 +16,8 @@ from ..core import (ENGINE_VERSION, InvalidInput, Storage, ToolResult, register)
 
 #: Header synonyms seen in client BOQs. Data, not cleverness -- extend the lists
 #: rather than adding fuzzy matching, so a mapping is always explainable.
+#: Each list is in priority order: when two columns match one field (a sheet
+#: with both "Item" and "Description"), the earlier synonym wins.
 HEADER_MAP: dict[str, tuple[str, ...]] = {
     "description": ("description", "item", "item description", "particulars",
                     "description of work", "scope"),
@@ -40,22 +42,29 @@ def _normalise(s) -> str:
     return str(s or "").strip().lower().replace("_", " ")
 
 
+def _map_row(ws, r: int) -> dict[str, int]:
+    """field -> column for one header row, preferring the earlier synonym."""
+    best: dict[str, tuple[int, int]] = {}
+    for c in range(1, min(ws.max_column, 40) + 1):
+        label = _normalise(ws.cell(row=r, column=c).value)
+        if not label:
+            continue
+        for field, synonyms in HEADER_MAP.items():
+            if label in synonyms:
+                rank = synonyms.index(label)
+                if field not in best or rank < best[field][0]:
+                    best[field] = (rank, c)
+    return {f: c for f, (_, c) in best.items()}
+
+
 def _detect_header(ws, limit: int = 25) -> tuple[int, dict[str, int]]:
     """The header row is the one that matches the most known synonyms."""
-    best_row, best_map, best_score = 0, {}, 0
+    best_row, best_map = 0, {}
     for r in range(1, min(limit, ws.max_row) + 1):
-        mapping, score = {}, 0
-        for c in range(1, min(ws.max_column, 40) + 1):
-            label = _normalise(ws.cell(row=r, column=c).value)
-            if not label:
-                continue
-            for field, synonyms in HEADER_MAP.items():
-                if label in synonyms and field not in mapping:
-                    mapping[field] = c
-                    score += 1
-        if score > best_score:
-            best_row, best_map, best_score = r, mapping, score
-    if best_score == 0:
+        mapping = _map_row(ws, r)
+        if len(mapping) > len(best_map):
+            best_row, best_map = r, mapping
+    if not best_map:
         raise InvalidInput(
             "No recognisable BOQ header row found in the first 25 rows. "
             f"Known column names: {sorted({s for v in HEADER_MAP.values() for s in v})}")
@@ -78,12 +87,7 @@ def read_client_boq(data: ReadClientBoqInput, storage: Storage | None = None) ->
 
     if data.header_row:
         header_row = data.header_row
-        colmap = {}
-        for c in range(1, min(ws.max_column, 40) + 1):
-            label = _normalise(ws.cell(row=header_row, column=c).value)
-            for field, syn in HEADER_MAP.items():
-                if label in syn and field not in colmap:
-                    colmap[field] = c
+        colmap = _map_row(ws, header_row)
     else:
         header_row, colmap = _detect_header(ws)
 

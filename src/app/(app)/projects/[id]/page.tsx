@@ -111,6 +111,12 @@ export default async function ProjectPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
+            href={`/projects/${id}/review`}
+            className="rounded-full border border-line-strong px-4 py-2 text-sm font-medium text-foreground hover:bg-white/5"
+          >
+            Check drawing, spec &amp; BOQ
+          </Link>
+          <Link
             href={`/projects/${id}/model`}
             className="rounded-full border border-line-strong px-4 py-2 text-sm font-medium text-foreground hover:bg-white/5"
           >

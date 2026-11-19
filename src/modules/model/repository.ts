@@ -8,7 +8,7 @@ import { sql } from "@/lib/db";
  * document id arrives from a URL and is attacker-controlled.
  */
 
-export type DrawingKind = "uploaded" | "takeoff" | "sheet" | "preview" | "other";
+export type DrawingKind = "uploaded" | "takeoff" | "sheet" | "preview" | "review" | "other";
 
 export type ProjectFile = {
   id: string;
@@ -16,6 +16,8 @@ export type ProjectFile = {
   contentType: string | null;
   byteSize: number | null;
   createdAt: Date;
+  /** What the file is: drawing, specification, boq, … */
+  classification: string;
   kind: DrawingKind;
   /** The run that made this file; null for an upload. */
   operationId: string | null;
@@ -33,6 +35,7 @@ const KIND_BY_TOOL: Record<string, DrawingKind> = {
   "cad.takeoff_sheet": "takeoff",
   "cad.sheet_setup": "sheet",
   "cad.render_svg": "preview",
+  "review.check": "review",
 };
 
 export async function listProjectFiles(
@@ -46,6 +49,7 @@ export async function listProjectFiles(
       contentType: string | null;
       byteSize: string | number | null;
       createdAt: Date;
+      classification: string;
       operationId: string | null;
       tool: string | null;
       status: string | null;
@@ -56,6 +60,7 @@ export async function listProjectFiles(
     }[]
   >`
     select d.id, d.filename, d.content_type, d.byte_size, d.created_at,
+           d.classification::text as classification,
            o.id as operation_id, o.tool, o.status::text as status,
            jsonb_array_length(coalesce(jsonb_unwrap(o.missing_json), '[]'::jsonb)) as missing_count,
            jsonb_unwrap(o.findings_json)::text as findings,
@@ -81,6 +86,7 @@ export async function listProjectFiles(
     contentType: r.contentType,
     byteSize: r.byteSize === null ? null : Number(r.byteSize),
     createdAt: r.createdAt,
+    classification: r.classification,
     kind: r.tool ? (KIND_BY_TOOL[r.tool] ?? "other") : "uploaded",
     operationId: r.operationId,
     tool: r.tool,

@@ -768,6 +768,8 @@ finished.
 | CAD | `cad.takeoff_sheet` | a **new** DXF: devices ringed and tagged by system, a schedule per system, unmapped blocks in a red NOT COUNTED table, room areas — on `SPI_TAKEOFF` / `SPI_SCHEDULE` / `SPI_ROOMS` |
 | CAD | `cad.sheet_setup` | a **new** DXF on an `SPI_SHEET` layer: ISO 5457 frame and zones, ISO 7200 title block (missing mandatory fields drawn as MISSING and returned as `missing_data`), scale bar, north arrow only from a stated bearing |
 | CAD | `cad.render_svg` | a **new** SVG picture of a DXF's model space, sized from its extents, for viewing in the browser (`/projects/[id]/model`); the DXF is not touched and no quantity is read from the picture |
+| Review | `review.read_spec` | requirement statements read from a specification (PDF, DOCX, TXT): quantities, per-area rates, room coverage, attributes (addressable, MP, Cat, IP, brand, standard) and heights — each with its clause text and page. Pattern reading: clauses it does not recognise are counted and reported, never guessed at |
+| Review | `review.check` | a **new** workbook and a **new** DXF (`SPI_RECOMMEND` layer): devices drawn vs SPI-recommended (bim.prototype's rule proposal) by room, with where and why; the drawing, specs and client BOQ checked against each other and the rules library. Every issue cites both sources; nothing is resolved, and what was not checked is listed |
 | Word | `word.fill_template` | .docx from a default or supplied template |
 | Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
 | Word | `word.to_pdf` | .pdf, via LibreOffice headless |
