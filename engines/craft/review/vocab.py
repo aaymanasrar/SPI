@@ -15,9 +15,10 @@ import re
 #: (system, device_type) -> phrases, lower case. Longer phrases are tried first.
 DEVICE_PHRASES: dict[tuple[str, str], list[str]] = {
     ("fire_alarm", "smoke_detector"): ["optical smoke detector", "photoelectric smoke detector",
-                                        "smoke detector", "smoke detectors", "smoke sensor"],
+                                        "smoke detector", "smoke detectors", "smoke sensor",
+                                        "smoke detection"],
     ("fire_alarm", "heat_detector"): ["heat detector", "heat detectors", "rate of rise detector",
-                                       "fixed temperature detector"],
+                                       "fixed temperature detector", "heat detection"],
     ("fire_alarm", "multisensor_detector"): ["multisensor detector", "multi-sensor detector",
                                               "multi sensor detector", "multicriteria detector"],
     ("fire_alarm", "beam_detector"): ["beam detector", "beam detectors"],

@@ -98,3 +98,38 @@ def test_merge_keeps_both_when_they_disagree():
     a = {**p, "value": 6, "read_by": "ai:m"}
     out = ai.merge([p], [a])
     assert sorted(r["read_by"] for r in out) == ["ai:m", "rules"]
+
+
+def test_attribute_values_must_be_that_attribute_and_in_the_quote(model):
+    answer, _ = model
+    q = "The fire alarm system shall be analogue addressable to NFPA 72, Siemens or approved equal"
+    answer["requirements"] = [
+        # A mixed bag under one attribute: only the technology survives, normalised.
+        {"clause_id": "c1", "kind": "attribute", "device_type": "fire_alarm_panel", "attribute": "technology",
+         "values": ["analogue addressable", "NFPA 72", "Siemens", "approved equal"], "quote": q},
+        # A value the clause never states.
+        {"clause_id": "c1", "kind": "attribute", "system": "fire_alarm", "attribute": "technology",
+         "values": ["conventional"], "quote": q},
+    ]
+    out = ai.read_clauses(clauses("1.1 " + q + "."))
+    [kept] = out["requirements"]
+    assert kept["values"] == ["addressable"]
+    # The clause names the system, not a panel.
+    assert kept["device_type"] is None and kept["system"] == "fire_alarm"
+    assert "none of its values" in out["rejected"][0]["why"]
+
+
+def test_a_count_for_a_device_the_quote_does_not_name_is_refused(model):
+    answer, _ = model
+    answer["requirements"] = [{"clause_id": "c1", "kind": "quantity", "device_type": "card_reader",
+                               "value": 4, "quote": "Provide 4 IP cameras"}]
+    out = ai.read_clauses(clauses("1.1 Provide 4 IP cameras."))
+    assert out["rejected"][0]["why"] == "its device is not named in its quote"
+
+
+def test_merge_matches_when_the_rule_reader_left_the_system_blank():
+    p = {"clause": "3.2", "location": "p.1", "text": "…", "kind": "attribute", "system": None,
+         "device_type": None, "attribute": "cable_category", "values": ["Cat6A"]}
+    a = {**p, "system": "data", "read_by": "ai:m"}
+    [m] = ai.merge([p], [a])
+    assert m["read_by"] == "both" and m["system"] == "data"
