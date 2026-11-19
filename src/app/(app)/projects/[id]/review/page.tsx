@@ -5,6 +5,7 @@ import { getProject } from "@/modules/projects/repository";
 import { listProjectFiles } from "@/modules/model/repository";
 import { listReviews } from "@/modules/review/repository";
 import { runReviewAction } from "@/modules/review/actions";
+import { uploadDrawingAction } from "@/modules/model/actions";
 import { engineHealth } from "@/modules/craft/client";
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, Select, Pill, Empty, NoPermission } from "@/components/ui";
@@ -15,6 +16,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   const project = await getProject(session.organizationId, id);
   if (!project) notFound();
   const mayRun = session.permissions.has("craft.commit");
+  const mayUpload = session.permissions.has("document.upload");
   const [files, runs, engine] = await Promise.all([
     listProjectFiles(session.organizationId, id),
     session.permissions.has("craft.preview") ? listReviews(session.organizationId, id) : Promise.resolve([]),
@@ -41,15 +43,42 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="grid gap-4 xl:grid-cols-5">
-        <div className="xl:col-span-2">
-          <Card title="New check" description="Pick any combination. Upload files on the 3D model & drawings page.">
+        <div className="space-y-4 xl:col-span-2">
+          <Card title="Attach files" description="Floor plan (DXF), specifications (PDF, DOCX, TXT) or the client BOQ (XLSX). Up to 150 MB each.">
+            {!mayUpload ? (
+              <NoPermission what="uploading documents" />
+            ) : (
+              <ActionForm action={uploadDrawingAction} submitLabel="Attach" resetOnSuccess>
+                <input type="hidden" name="projectId" value={id} />
+                <Select
+                  label="These files are"
+                  name="kind"
+                  defaultValue="specification"
+                  options={[
+                    { value: "specification", label: "Specifications" },
+                    { value: "boq", label: "Client BOQ" },
+                    { value: "drawing", label: "Drawings" },
+                    { value: "auto", label: "Decide by file type (PDF = drawing)" },
+                  ]}
+                />
+                <Field label="Files">
+                  <input
+                    type="file"
+                    name="files"
+                    multiple
+                    required
+                    accept=".dxf,.pdf,.docx,.txt,.xlsx"
+                    className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-foreground"
+                  />
+                </Field>
+              </ActionForm>
+            )}
+          </Card>
+          <Card title="New check" description="Pick any combination of what is attached.">
             {!mayRun ? (
               <NoPermission what="running engine checks" />
             ) : dxfs.length + specs.length + boqs.length === 0 ? (
-              <Empty>
-                Nothing to check yet.{" "}
-                <Link href={`/projects/${id}/model`} className="text-accent hover:underline">Upload a drawing, spec or BOQ</Link>.
-              </Empty>
+              <Empty>Nothing to check yet. Attach a drawing, spec or BOQ above.</Empty>
             ) : (
               <ActionForm action={runReviewAction} submitLabel="Run check">
                 <input type="hidden" name="projectId" value={id} />

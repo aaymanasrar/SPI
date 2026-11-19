@@ -92,6 +92,7 @@ export async function uploadDrawingAction(
       }
     }
     revalidatePath(`/projects/${projectId}/model`);
+    revalidatePath(`/projects/${projectId}/review`);
     return {
       ok: true,
       message: `Uploaded ${saved.map((s) => s.name).join(", ")}.${notes.length ? " " + notes.join(" ") : ""}`,
