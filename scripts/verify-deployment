@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Verify the deployed engines service end to end.
+#
+#   scripts/verify-deployment --service https://engines.internal:8000
+#
+# Checks the deployed service answers, exposes the whole tool registry, runs a
+# real drawing-to-BOQ-to-PDF workflow, and is NOT reachable without the network
+# controls it depends on. Never run against a service on a public address: it
+# has no authentication of its own by design -- authorisation happens in the
+# Next.js server action before the call.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+SVC=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --service) SVC="$2"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+[ -z "$SVC" ] && { echo "usage: $0 --service <base-url>" >&2; exit 2; }
+
+fail=0
+ok()  { printf '  ok    %s\n' "$1"; }
+bad() { printf '  FAIL  %s\n' "$1"; fail=1; }
+
+echo "== reachability =="
+h=$(curl -s --max-time 15 "$SVC/health" || echo "")
+if [ -z "$h" ]; then bad "no response from $SVC/health; nothing below ran"; exit 1; fi
+echo "  $h"
+ok "service responds"
+
+echo
+echo "== tool registry =="
+n=$(curl -s --max-time 20 "$SVC/tools" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).length)}catch(e){console.log(0)}})')
+[ "${n:-0}" -ge 15 ] && ok "$n tools exposed" || bad "only ${n:-0} tools exposed; expected 15 or more"
+
+echo
+echo "== LibreOffice present in the image =="
+# word.to_pdf refuses with a named program when it is absent, so a refusal here
+# is a precise signal rather than a crash.
+r=$(curl -s --max-time 30 -X POST "$SVC/tools/word.to_pdf" \
+     -H 'content-type: application/json' \
+     -d '{"input":{"storage_key":"__probe__.docx"}}' || echo "")
+if echo "$r" | grep -q "LibreOffice is not installed"; then
+  bad "LibreOffice missing from the deployed image; word.to_pdf cannot run"
+elif echo "$r" | grep -q "No such object"; then
+  ok "LibreOffice present (tool reached storage before failing on the probe)"
+else
+  bad "unexpected response: ${r:0:160}"
+fi
+
+echo
+echo "== the service must not be publicly reachable =="
+echo "  This script cannot prove a negative from inside your network."
+echo "  Check by hand, from outside it:"
+echo "    curl --max-time 10 $SVC/health     # must time out or be refused"
+bad "network exposure not verified by this script"
+
+echo
+[ "$fail" -eq 0 ] && echo "DEPLOYMENT VERIFICATION PASSED" \
+                  || echo "DEPLOYMENT VERIFICATION FAILED or INCOMPLETE"
+exit "$fail"

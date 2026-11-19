@@ -47,13 +47,13 @@ export function ActionForm({
       )}
 
       {!state.ok && (
-        <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+        <p className="rounded-lg bg-danger/12 px-3 py-2 text-xs text-danger">
           {state.error}
         </p>
       )}
 
       {state.ok && state.message && (
-        <p className="rounded-md bg-teal-50 px-3 py-2 text-xs text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">
+        <p className="rounded-lg bg-leaf-soft px-3 py-2 text-xs text-leaf">
           {state.message}
         </p>
       )}
@@ -69,7 +69,7 @@ function Submit({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+      className="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink hover:brightness-110 disabled:opacity-50"
     >
       {pending ? "Working…" : label}
     </button>
@@ -83,7 +83,7 @@ export function InlineSubmit({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+      className="rounded-full border border-line-strong px-2.5 py-1 text-xs font-medium text-foreground hover:bg-white/5 disabled:opacity-50"
     >
       {pending ? "…" : label}
     </button>

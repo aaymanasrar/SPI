@@ -1,0 +1,173 @@
+# Data requests — craft engines
+
+Tracks what the craft engines need from SmartPage and do not have. Until an item
+arrives, the corresponding tool returns `missing_data` rather than inventing a
+substitute.
+
+**Items 1-3 are closed by decision, not by delivery.** You said there are no
+templates to send and to make a clean default for everything, so
+`craft/word/templates.py` now holds three real default templates — transmittal,
+submittal cover, compliance statement — all built on one shared style
+(`craft/word/style.py`), which `word.compliance_sheet` also uses, so every Word
+output looks the same.
+
+They carry no logo, no letterhead and no company name. That is deliberate: that
+artwork is yours, and a made-up one would go out on a document sent to a client.
+A test asserts no identity is invented. To override any of them later, put your
+own .docx in storage with `{{placeholders}}` typed into it and point
+`word.fill_template` at it — nothing else is needed.
+
+| # | Item | Blocks | Status |
+|---|---|---|---|
+| 1 | SmartPage **compliance sheet** .docx template | `word.compliance_sheet` | Closed - clean default built |
+| 2 | SmartPage **submittal cover** .docx template | `word.fill_template` | Closed - clean default built |
+| 3 | SmartPage **transmittal** .docx template | `word.fill_template` | Closed - clean default built |
+| 4 | **Symbol / block mapping** per client drawing standard | better `cad.count_devices` coverage | Generic default built; client standard still wanted |
+| 5 | A representative client **BOQ workbook** | `grid.read_client_boq` header synonyms | Not supplied |
+| 6 | A representative **DXF floor plan** | every `cad.*` tool | Not supplied |
+| 7 | A **licence decision** on two LGPL packages | nothing | Closed - signed off by delegation |
+| 8 | **LibreOffice** wherever the engines run | `word.to_pdf` | Local: done. Image: written, not yet built |
+
+## Notes on each
+
+**1–3 Templates.** Place in `knowledge/templates/`. WordCraft substitutes
+placeholders of the form `{{ field }}` using `python-docx`; it does not need a
+templating language. What it does need is the real document, because a compliance
+sheet's column order and the consultant's expected wording are SmartPage's
+convention, not something to invent.
+
+**4 Symbol mapping — partly closed.** A generic default now ships as data in
+`engines/craft/cad/default_symbols.json` and is used when no map is supplied:
+31 rules matching **descriptive** block names (`SMOKE-DETECTOR`,
+`CARD-READER`, `DOME-CAMERA`), and 16 short codes listed as
+`deliberately_unmapped` with the reason, which `cad.count_devices` repeats in
+the `missing_data` note.
+
+So a drawing that names its blocks in words counts straight away. A drawing
+that uses codes still stops — on purpose. Guessing `SD` wrong moves a device
+between the fire alarm and mechanical packages, and a wrong count is worse than
+no count because it looks finished.
+
+Still wanted: **one map per client drawing standard**, which is the only thing
+that makes `SD`, `FD` and `MCP` countable. Read it off the drawing's legend
+sheet. It stays data, never code — a mapping hard-coded in `symbols.py` would be
+an invented engineering rule.
+
+**5 Client BOQ.** `grid/reader.py` recognises header synonyms from a list that is
+currently a reasonable guess (`qty`, `qnty`, `uom`, `mlfb`, …). One real client
+workbook would replace guesswork with evidence. The reader fails loudly when no
+header is recognised rather than mapping columns by position.
+
+**6 DXF.** Needed for golden-file tests with real geometry. The current fixtures
+will be synthesised with `ezdxf` and are explicitly not representative of how a
+consultant draws.
+
+## Related, outside this document
+
+Two gaps in already-encoded data block calculations the engines will want:
+
+- **15 fire devices have no `alarm_current_ma`** (Siemens capture, 0020–0021), so
+  rule FA-18 cannot be computed from the catalogue. `engine_readiness` lists them.
+- **`SEC-07` / `SAES-O-207` were never retrieved**, so security UPS autonomy is an
+  open assumption in rule `SPT-LP-19`.
+
+## 7 A licence decision only you can make
+
+The npm half of `scripts/check-licenses` was not running. It probed
+`license-checker --version`, which prints the version and still exits 1, so the
+gate read "not installed", printed `SKIP`, and reported **Licence check
+passed**. The Python half was genuinely clean, which is why the green looked
+believable. Both halves now fail rather than skip, and the npm half judges each
+package (`scripts/npm-licence-policy.mjs`, tested by
+`scripts/tests/licence-policy.test.sh`).
+
+With it running, two packages in the existing tree are outside the allowed set.
+Neither came from the craft engines:
+
+| Package | Licence | Why it is here |
+|---|---|---|
+| `@img/sharp-libvips-darwin-arm64` | LGPL-3.0-or-later | `next` → `sharp`, image optimisation |
+| `@img/sharp-wasm32` | Apache-2.0 AND LGPL-3.0-or-later AND MIT | unconstrained optional dep of `sharp` |
+
+Both are libvips — the same image-processing library, once as a native binary and
+once compiled to WebAssembly. Your policy forbids "GPL shipped to the browser";
+these run in the Node server runtime, and Next does not bundle `sharp` into
+client JS, so on my reading they do not breach it. LGPL is on neither your
+allowed nor your forbidden list, which is why this is your call and not mine.
+
+They are recorded as exceptions in `npm-licence-policy.mjs` and marked
+`signedOff: false`, so the gate passes but prints them with **"not yet signed off
+by the licence owner"** on every run. Three ways out:
+
+1. **Accept** — I set `signedOff: true` and the warning stops.
+2. **Add LGPL for separate-process / server-side use** to the allowed list, as
+   MPL-2.0 already is. Then neither needs an exception.
+3. **Remove them** — means giving up Next's image optimisation (`images.unoptimized`,
+   or a different loader). `@img/sharp-wasm32` could be dropped on its own via an
+   npm `overrides` entry without losing anything on macOS or Linux.
+
+Until you say, option 1's warning stays on screen. I have not changed your policy.
+
+## 8 LibreOffice
+
+Installed locally on 2026-10-21 (`brew install --cask libreoffice`), version:
+
+```
+LibreOffice 26.8.0.3 bce0998afefdbc355585ca324285661a2170ba77
+```
+
+`word.to_pdf` has now actually run: the full suite is **105 passed, 0 skipped**,
+and the test that performs a real conversion is among them. A cover and a
+compliance statement convert in about 1.1 s each.
+
+`find_soffice()` resolves `/opt/homebrew/bin/soffice`, and checks `SOFFICE_PATH`
+first so a deploy image can point somewhere else.
+
+### The deploy image
+
+`engines/Dockerfile` installs it (`libreoffice-writer-nogui`), plus
+`fonts-crosextra-carlito` and `fonts-liberation`. Carlito is metric-compatible
+with Calibri, which `craft/word/style.py` asks for; without it LibreOffice
+substitutes a font with different metrics and every generated PDF reflows.
+
+**The image has not been built, and could not be on this machine.** Docker is
+not installed here (that is **D-1**), so Colima was installed to build it. Its
+VM image download failed twice:
+
+```
+downloading disk image ...
+error downloading 'ubuntu-24.04-minimal-cloudimg-arm64-docker.raw.gz':
+read tcp ...->185.199.111.133:443: read: connection reset by peer
+```
+
+41 minutes, connection reset. The asset is served from a GitHub pre-signed URL
+valid for about an hour, and this connection moves roughly 0.1 MB/s — the URL
+expires before the image lands. Even if the VM came up, the build then has to
+pull `python:3.12-slim` and apt-download LibreOffice inside it, which is several
+hundred MB more.
+
+`colima`, `docker` and `docker-compose` are installed and will work on a faster
+connection; nothing needs reinstalling. A partial download sits in
+`~/Library/Caches/colima` and can be deleted.
+
+What has been verified, without building:
+
+- All four apt packages exist in bookworm: `libreoffice-writer-nogui`
+  (4:7.4.7-1+deb12u14), `libreoffice-writer`, `fonts-crosextra-carlito`
+  (20220224-1), `fonts-liberation` (1:1.07.4-11).
+- `/usr/bin/soffice`, which `SOFFICE_PATH` points at, is shipped by
+  `libreoffice-common` — not by the `-nogui` package itself. It is a **hard**
+  dependency of both `libreoffice-writer-nogui` and `libreoffice-core-nogui`, so
+  `--no-install-recommends` does not drop it.
+
+So treat the Dockerfile as reviewed but unproven. The command that proves it:
+
+```
+docker build -t spi-craft-engines:dev engines/
+docker run --rm spi-craft-engines:dev python -c \
+  "from craft.word import find_soffice; print(find_soffice())"
+```
+
+A machine without LibreOffice gets a clear refusal naming the program — not a
+crash, and not a silent fallback to a renderer that would drop the template
+styles.

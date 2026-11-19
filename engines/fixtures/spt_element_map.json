@@ -1,0 +1,15 @@
+{
+  "name": "SPT demo family naming",
+  "version": "0.1",
+  "source_document": "FIXTURE — stands in for a project's Revit family naming standard (fixtures/revit_elv_office.py). Replace with the real BIM execution plan before use on a project.",
+  "rules": [
+    {"name": "SPT_FA_Sounder_Beacon:.*", "is_regex": true, "system": "fire_alarm", "device_type": "sounder_strobe"},
+    {"name": "SPT_ACS_CardReader:.*", "is_regex": true, "system": "access_control", "device_type": "card_reader"},
+    {"ifc_class": "IfcCommunicationsAppliance", "name": "Wireless Access Point", "system": "data", "device_type": "wireless_access_point"},
+    {"ifc_class": "IfcSensor", "predefined_type": "SMOKESENSOR", "system": "fire_alarm", "device_type": "smoke_detector"},
+    {"ifc_class": "IfcAlarm", "predefined_type": "MANUALPULLBOX", "system": "fire_alarm", "device_type": "manual_call_point"},
+    {"ifc_class": "IfcAudioVisualAppliance", "predefined_type": "CAMERA", "system": "cctv", "device_type": "camera"},
+    {"ifc_class": "IfcOutlet", "predefined_type": "DATAOUTLET", "system": "data", "device_type": "data_outlet"},
+    {"ifc_class": "IfcOutlet", "predefined_type": "POWEROUTLET", "ignore": true, "note": "Electrical package."}
+  ]
+}

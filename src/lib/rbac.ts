@@ -49,7 +49,9 @@ export type Permission =
   | "review_task.resolve"
   | "rfq.manage"
   | "rfq.respond"
-  | "audit.read";
+  | "audit.read"
+  | "craft.preview"
+  | "craft.commit";
 
 /**
  * Asserts the caller holds a permission, and returns the session.

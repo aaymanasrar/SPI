@@ -59,3 +59,4 @@ next-env.d.ts
 
 # Keep the template committed; only real env files are ignored.
 !.env.example
+out/

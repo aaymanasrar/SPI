@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { AuthError, PermissionError } from "@/lib/auth";
+import { CraftServiceError, CraftMissingDataError } from "@/lib/errors";
 
 /**
  * Shared result shape for Server Actions, and the error translation that keeps
@@ -46,6 +47,28 @@ export async function runAction(
           string,
           string[]
         >,
+      };
+    }
+
+    // A craft tool refusing to invent a value is a normal outcome, not a fault.
+    // Name the fields so the user knows what to go and capture.
+    if (error instanceof CraftMissingDataError) {
+      return {
+        ok: false,
+        error:
+          `Not enough captured data to run ${error.tool}. Missing: ` +
+          error.missing.map((m) => `${m.record}.${m.field}`).join(", ") +
+          ". These must come from the datasheet \u2014 the engine will not assume a value.",
+      };
+    }
+    if (error instanceof CraftServiceError) {
+      console.error("[craft]", error.tool, error.reason, error.message);
+      return {
+        ok: false,
+        error:
+          error.reason === "unreachable" || error.reason === "timeout"
+            ? "The calculation service is not responding. Try again, or tell an administrator."
+            : `The calculation service rejected the request (${error.tool}).`,
       };
     }
 

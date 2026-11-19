@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Row-level-security posture check. Run against any database, any time.
+#
+#   scripts/check-rls "postgresql://..."      # or set DATABASE_URL
+#
+# Asserts, and exits non-zero on any failure:
+#   1. every table in public has RLS enabled
+#   2. every view in public is security_invoker (a view without it runs as its
+#      owner and reads straight through the RLS protecting its base tables)
+#   3. no table has a permissive policy granting anon access it should not have
+#
+# 0011 enabled RLS with a one-shot loop over pg_tables. 0017 then created two
+# tables that went unprotected until 0023, and 0020/0021 created two views that
+# bypassed RLS entirely until 0024. A posture applied once is not a posture
+# maintained, which is what this script is for.
+set -uo pipefail
+
+DB="${1:-${DATABASE_URL:-}}"
+if [ -z "$DB" ]; then
+  echo "usage: scripts/check-rls <connection-string>   (or set DATABASE_URL)" >&2
+  exit 2
+fi
+
+q() { psql -tAX -v ON_ERROR_STOP=1 -d "$DB" -c "$1"; }
+
+if ! q "select 1" >/dev/null 2>&1; then
+  echo "  cannot connect to the database; the check did not run." >&2
+  echo "  A check that cannot run is not a pass." >&2
+  exit 1
+fi
+
+fail=0
+
+# Guard against a vacuous pass on an empty or wrong database.
+n_tables=$(q "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relkind='r'")
+if [ "${n_tables:-0}" -lt 2 ]; then
+  echo "  only ${n_tables:-0} table(s) in public -- wrong database, or it is empty."
+  exit 1
+fi
+echo "  $n_tables tables, $(q "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='v'") views in public"
+
+unprotected=$(q "select string_agg(c.relname, ', ' order by c.relname)
+                 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+                 where n.nspname='public' and c.relkind='r' and not c.relrowsecurity")
+if [ -n "$unprotected" ]; then
+  echo "  FAIL tables without row level security:"
+  echo "         $unprotected"
+  echo "       Anyone holding the publishable key can read these."
+  fail=1
+else
+  echo "  ok   every table has row level security"
+fi
+
+leaky=$(q "select string_agg(c.relname, ', ' order by c.relname)
+           from pg_class c join pg_namespace n on n.oid=c.relnamespace
+           where n.nspname='public' and c.relkind='v'
+             and coalesce((select option_value from pg_options_to_table(c.reloptions)
+                           where option_name='security_invoker'),'false') <> 'true'")
+if [ -n "$leaky" ]; then
+  echo "  FAIL views without security_invoker:"
+  echo "         $leaky"
+  echo "       These run as their owner and read through the RLS on their base tables."
+  fail=1
+else
+  echo "  ok   every view is security_invoker"
+fi
+
+# Default-deny is the documented posture (0011). A policy is not wrong, but it
+# is a deliberate decision, so surface it rather than let one appear silently.
+policies=$(q "select string_agg(tablename || '.' || policyname, ', ' order by tablename)
+              from pg_policies where schemaname='public'")
+if [ -n "$policies" ]; then
+  echo "  note RLS policies exist (0011's posture is default-deny, no policies):"
+  echo "         $policies"
+  echo "       Confirm each one is intended."
+fi
+
+reachable=$(q "select string_agg(table_name, ', ' order by table_name)
+               from information_schema.role_table_grants
+               where table_schema='public' and grantee in ('anon')
+                 and privilege_type='SELECT'" 2>/dev/null || true)
+if [ -n "$reachable" ]; then
+  echo "  note anon holds SELECT on: $reachable"
+  echo "       Harmless while RLS denies the rows, but check it is intended."
+fi
+
+echo
+if [ "$fail" -ne 0 ]; then
+  echo "RLS CHECK FAILED"
+  exit 1
+fi
+echo "RLS check passed."

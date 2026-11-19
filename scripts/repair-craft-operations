@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Repair the unvalidated craft_operations constraint. See
+# docs/runbooks/craft-operations-repair.md for why it is unvalidated.
+#
+#   scripts/repair-craft-operations --db "$URL" --plan            # default: show only
+#   scripts/repair-craft-operations --db "$URL" --rebuild --authorized
+#   scripts/repair-craft-operations --db "$URL" --surgical --authorized
+#
+# Does nothing without --authorized. Audit rows are not deleted on a whim.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+DB=""; MODE="plan"; OK=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --db) DB="$2"; shift 2 ;;
+    --plan) MODE="plan"; shift ;;
+    --rebuild) MODE="rebuild"; shift ;;
+    --surgical) MODE="surgical"; shift ;;
+    --authorized) OK=1; shift ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+[ -z "$DB" ] && { echo "usage: $0 --db <connection-string> [--plan|--rebuild|--surgical] [--authorized]" >&2; exit 2; }
+
+q() { psql -tAX -d "$DB" -c "$1" 2>/dev/null; }
+
+echo "== current state =="
+q "select '  rows: '||count(*) from craft_operations"
+q "select '  violating: '||count(*) from craft_operations
+    where status='ok' and findings_json @> '[{\"severity\":\"blocker\"}]'::jsonb"
+q "select '  constraint validated: '||convalidated from pg_constraint
+    where conname='craft_operations_blocker_not_ok'"
+echo
+echo "  offending rows:"
+q "select '    '||id||'  tool='||tool||'  engine_version='||engine_version
+   from craft_operations
+   where status='ok' and findings_json @> '[{\"severity\":\"blocker\"}]'::jsonb" | sed 's/^/ /'
+
+if [ "$MODE" = "plan" ]; then
+  echo
+  echo "Plan only. Nothing was changed."
+  echo "  --rebuild   drop and rebuild this database from all 25 migrations."
+  echo "              Destroys everything in it, including the organisation and"
+  echo "              user that the seed migrations need. Read the bootstrap gap"
+  echo "              in the runbook first: migrations alone give you an empty"
+  echo "              rules library and an empty catalogue."
+  echo "  --surgical  disable the append-only trigger, delete the rows, re-enable,"
+  echo "              validate. NOT recommended: it defeats the control it is"
+  echo "              removing rows under, and leaves no trace afterwards."
+  exit 0
+fi
+
+if [ "$OK" -ne 1 ]; then
+  echo
+  echo "REFUSED: --$MODE changes or destroys audit records and needs --authorized." >&2
+  exit 1
+fi
+
+case "$MODE" in
+  rebuild)
+    name=$(q "select current_database()")
+    echo
+    echo "Rebuilding '$name' from migrations."
+    psql -tAX -d "$DB" -c "select 1" >/dev/null || { echo "cannot connect" >&2; exit 1; }
+    for f in supabase/migrations/*.sql; do
+      psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$f" >/dev/null 2>&1 \
+        || { echo "FAILED at $(basename "$f")" >&2; exit 1; }
+    done
+    echo "  all migrations applied"
+    ;;
+  surgical)
+    echo
+    echo "Removing the offending rows with the append-only trigger disabled."
+    echo "This is recorded here and nowhere in the database."
+    psql -v ON_ERROR_STOP=1 -q -d "$DB" <<'SQL' || exit 1
+begin;
+alter table craft_operations disable trigger user;
+delete from craft_operations
+ where status='ok' and findings_json @> '[{"severity":"blocker"}]'::jsonb;
+alter table craft_operations enable trigger user;
+alter table craft_operations validate constraint craft_operations_blocker_not_ok;
+commit;
+SQL
+    echo "  rows removed, constraint validated"
+    ;;
+esac
+
+echo
+echo "== after =="
+q "select '  violating: '||count(*) from craft_operations
+    where status='ok' and findings_json @> '[{\"severity\":\"blocker\"}]'::jsonb"
+q "select '  constraint validated: '||convalidated from pg_constraint
+    where conname='craft_operations_blocker_not_ok'"
+echo
+echo "Now run:  scripts/check-rls \"\$DB\"  &&  scripts/tests/tenant-isolation.test.sh \"\$DB\""

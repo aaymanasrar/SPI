@@ -394,6 +394,9 @@ that no client-role API response contains cost or margin keys.
   total expanded size and path traversal.
 - Heavy parsing happens in workers, never in the request path.
 
+The **craft engines** (§18) are the read/write half of this: they consume originals from object
+storage and emit new objects, never mutating what was uploaded.
+
 **Carried forward from earlier work:** PDF text extraction, table extraction and page rendering
 for drawings that carry no extractable text were built and proven against a real Aramco package.
 That work is applicable at Phase 5–6 and should be reused rather than rediscovered. It is *not*
@@ -662,6 +665,14 @@ quantity. Whether MVP takes manual lengths, computes from a route model, or both
 engineering decision. This is exactly the value the previous build fabricated by measuring lines
 on a drawing, so it warrants an explicit answer.
 
+**D-8 — LGPL in the dependency tree.** *Blocks: nothing; the gate passes with the exception
+recorded.* The allowed set is MIT, BSD, Apache-2.0, ISC, PSF and MPL-2.0 (separate process only);
+AGPL and GPL-in-the-browser are forbidden. LGPL is on neither list. Two packages are LGPL-3.0
+(`@img/sharp-libvips-*` and `@img/sharp-wasm32`), both server-side libvips arriving via
+`next` → `sharp`. They are recorded as exceptions in `scripts/npm-licence-policy.mjs` with
+`signedOff: false`, so every run of the gate prints them. Options and consequences are set out in
+`docs/data-requests/craft-engines.md` §7.
+
 ---
 
 ## 17. Appendix A status
@@ -701,3 +712,154 @@ becomes a new version (§12).
 without any of this.** Everything from the design modules onward produces an empty shell until the
 corresponding data arrives. Collecting it is organizational work that is slower than the coding,
 so it should start immediately and in parallel — it is the real critical path, not the software.
+
+---
+
+## 18. Craft engines
+
+The platform can reason about rules and compute numbers, but engineers work in .xlsx, .docx, .dxf
+and .pdf. The craft engines read and write those files. They are headless tools, not editors: Excel,
+Word and AutoCAD keep their jobs.
+
+### 18.1 Position
+
+A separate Python process (`engines/`), exposed over HTTP and called from `src/modules/craft/`.
+`engines/Dockerfile` builds it, and `compose.yaml` runs it on loopback; the image carries
+LibreOffice because `word.to_pdf` shells out to it, plus Carlito and Liberation so generated PDFs
+keep the metrics the templates were laid out for.
+The service has **no authentication of its own** — authorisation happens in the server action
+before the call — so it must never be bound to a public address.
+Separate because the mature libraries for these formats are Python (openpyxl, python-docx, ezdxf,
+pdfplumber) and because a CPU-bound parse must not sit in a Next.js request path.
+
+`src/modules/craft/actions.ts` makes the HTTP call **outside** the transaction, then opens one to
+write `craft_operations`, the output `documents` row and the audit entry together. The postgres.js
+pool is `max: 10`; a slow parse holding a pooled connection would starve the application.
+
+### 18.2 The rule that shapes every tool
+
+**No tool invents an engineering value.** Where a value is absent, the tool returns
+`status='missing_data'` with an itemised list naming the record and field, and — when the output
+is a document — **writes no file at all**. A half-finished document circulates as if it were
+finished.
+
+| Situation | What happens |
+|---|---|
+| Template placeholder with no value | No .docx written; the key is itemised |
+| Spec clause with no captured value | Not "Comply"; no sheet written |
+| Block insert not in the symbol map | Whole count is `missing_data`; partial tallies still returned |
+| DXF with `$INSUNITS = 0` | Outlines returned, areas refused |
+| PDF page with no text layer | Reported as needing OCR, not as empty text |
+| BOQ line with no approved price | `missing_data`, not zero |
+
+### 18.3 Tools
+
+| Engine | Tool | Writes |
+|---|---|---|
+| Grid | `grid.write_boq` | .xlsx, value **and** live formula per cell, hidden provenance sheet |
+| Grid | `grid.read_client_boq` | nothing — returns proposals |
+| PDF | `pdf.extract` | nothing — text, tables, vector paths |
+| PDF | `pdf.pack` | merged, stamped submittal pack |
+| CAD | `cad.read_dxf` | nothing — layer/block/insert inventory |
+| CAD | `cad.count_devices` | `drawing_objects` rows, `source='imported'`, `review_status='pending'` |
+| CAD | `cad.extract_rooms` | nothing — outlines, labels, areas |
+| CAD | `cad.place_devices` | `drawing_objects` proposals from a cited spacing rule |
+| CAD | `cad.markup` | a **new** DXF with notes on an `SPI_MARKUP` layer |
+| CAD | `cad.takeoff_sheet` | a **new** DXF: devices ringed and tagged by system, a schedule per system, unmapped blocks in a red NOT COUNTED table, room areas — on `SPI_TAKEOFF` / `SPI_SCHEDULE` / `SPI_ROOMS` |
+| CAD | `cad.sheet_setup` | a **new** DXF on an `SPI_SHEET` layer: ISO 5457 frame and zones, ISO 7200 title block (missing mandatory fields drawn as MISSING and returned as `missing_data`), scale bar, north arrow only from a stated bearing |
+| Word | `word.fill_template` | .docx from a default or supplied template |
+| Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
+| Word | `word.to_pdf` | .pdf, via LibreOffice headless |
+| BIM | `bim.read_ifc` | nothing — schema, authoring tool, units, storeys, element classes and types |
+| BIM | `bim.count_devices` | `drawing_objects` rows, `source='imported'`, `review_status='pending'`, per storey |
+| BIM | `bim.extract_spaces` | nothing — rooms, storeys, areas from the model's own quantities |
+| BIM | `bim.scene_3d` | nothing — room outlines and heights, device positions; feeds the simulator |
+
+BIM reads **IFC**, which Revit exports natively; `.rvt` is recognised and refused with the export
+route, because it is undocumented, changes every release and may not be reverse-engineered under
+Autodesk's licence. The STEP reader is our own: IfcOpenShell is LGPL-3.0. Revit's export habits
+(location baked into geometry, devices contained in the storey rather than the room, proxies) and
+the reasons are in `docs/decisions/0002-bim-engine.md`. Family-to-device mapping is an
+`ElementMap`, data with a required `source_document`, exactly as §18.5 describes for symbols.
+
+`simulator/` builds a page from `bim.scene_3d`: the model in 3D, plan and walk views, coverage
+checks against SPT-FA-01/02/04/13 and SPT-CC-01/03/09, what-if proposals, and a fire-drill
+sequence. `simulator/rules.py` copies those rules out of migration 0017 and stops the build if
+their text no longer states the values the page applies.
+
+`cad.place_devices` is implemented. It was a stub while nothing could supply a spacing figure with
+a source; the rules library now carries them, and the rule is passed in as data — `max_spacing_m`,
+`max_wall_distance_m` and the code that says so. **No spacing value exists anywhere in the package**,
+and a test asserts it. Everything it emits is a proposal: `source='ai_extracted'`,
+`review_status='pending'`, never `'imported'`, because a device counted off a drawing is evidence
+and one computed from a rule is a suggestion.
+
+`cad.measure_route` is still registered as `implemented=false` and raises `NotImplementedError`.
+Cable length needs containment routes, risers and a slack allowance — **D-7**. Measuring a straight
+line between two symbols is the fabrication the previous build shipped.
+
+### 18.4 Word output has one default look
+
+`craft/word/style.py` holds the shared document style — A4, 2 cm margins, one typeface, a title, a
+borderless label/value block, then content — and `craft/word/templates.py` holds three default
+templates built on it: transmittal, submittal cover and compliance statement.
+`word.compliance_sheet` uses the same style, so every Word output matches.
+
+No logo, no letterhead, no company name. That artwork is SmartPage's, and a generated one would go
+out on a document sent to a client; a test asserts no identity is invented. To override a template,
+put a .docx in storage with `{{placeholders}}` typed into it and point `word.fill_template` at it —
+the substitution works on any .docx.
+
+Every placeholder is mandatory, because an unfilled one blocks the write. Field sets are therefore
+kept to what a document of that kind cannot go out without, and
+`templates.placeholders(kind)` returns the set at runtime for a form to build from. The submittal
+cover and the compliance statement state that they are generated proposals and not submittals until
+signed; the transmittal does not, because it makes no engineering claim.
+
+### 18.5 Symbol mapping is data
+
+`cad.count_devices` takes a `SymbolMap` as input. No mapping is hard-coded, because a block named
+`FD` is a smoke detector on one job and a fire damper on another. A map must declare
+`source_document`; one with no stated origin cannot be audited later and is rejected.
+
+A generic default ships as data in `engines/craft/cad/default_symbols.json` and is used when no map
+is supplied. It matches **descriptive** block names only — a block literally called
+`SMOKE-DETECTOR`, `CARD-READER`, `DOME-CAMERA`. It deliberately does **not** interpret short codes:
+`SD`, `FD`, `MCP`, `PANEL` and thirteen others are listed in `deliberately_unmapped` with the
+reason, and `cad.count_devices` puts that reason into the `missing_data` note, so the gap reads as a
+decision rather than an oversight.
+
+The reasoning: a *wrong* mapping is worse than a missing one. A missing one produces
+`missing_data`, which someone acts on. A wrong one produces a confident count that flows into a BOQ
+and is never looked at again. `SD` is smoke detector on a fire alarm layer and smoke damper on a
+mechanical one; guessing moves a device between packages. The default is a starting point, not a
+client standard — request #4 in `docs/data-requests/craft-engines.md` is still open.
+
+### 18.6 Authority
+
+Every tool returns a proposal. `TOOL_POLICY` in `src/modules/craft/tools.ts` sets `aiMayCommit:
+false` for all of them (§4.1 rule 1 — `ai/` may not write to authoritative tables). The AI may
+assemble a submittal pack; a person issues it. Counted devices land in `drawing_objects` as
+`pending` and reach `design_devices` only through the existing `building_model.review` flow.
+
+### 18.7 Licensing
+
+Allowed: MIT, BSD, Apache-2.0, ISC, PSF, MPL-2.0 (separate process only). Forbidden: AGPL, GPL
+shipped to the browser, HyperFormula, the ODA SDK.
+
+Consequences actually taken: **no PyMuPDF** (AGPL) — `pdfplumber` and `pypdf` instead; **no
+docxtpl** (LGPL-2.1) — `craft/word/placeholders.py` does the run merging with `python-docx`, which
+is why that module exists; **no formula evaluator** — GridCraft writes the formula text and lets
+Excel calculate; **no DWG reader** — the usual one is the ODA SDK, so DWG must be converted
+upstream. LibreOffice is MPL-2.0 and is invoked as a separate process, never linked.
+
+`scripts/check-licenses` gates both halves of the tree and fails rather than skips when it cannot
+run. The npm half judges each package (`scripts/npm-licence-policy.mjs`), because a flat `grep GPL`
+can only express "no GPL anywhere", which would reject Next.js itself. See **D-8**.
+
+### 18.8 Record
+
+Every run inserts one `craft_operations` row (migration 0023, append-only): engine, tool, actor,
+mode, inputs, outputs, provenance, missing items, warnings, status, duration and engine version.
+Output `documents` rows carry `source_operation_id`, so any generated file can be traced to the run
+that made it and the inputs it read.

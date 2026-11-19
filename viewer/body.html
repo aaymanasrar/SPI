@@ -1,0 +1,123 @@
+<div id="app">
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="badge">
+      <span id="b-mode">Overview</span>
+      <span>23.00 &times; 23.56 m</span>
+      <span>Ceiling 3.00 m</span>
+    </div>
+    <button id="walkbtn" type="button">Hold to walk</button>
+  </div>
+
+  <aside id="rail">
+    <div class="hd">
+      <p class="eyebrow">KG Building &middot; Level 01</p>
+      <h1>Kindergarten Floor</h1>
+      <p class="sub">The rooms are the drawing's. The fire alarm devices are
+        proposals, each one carrying the clause it came from.</p>
+    </div>
+
+    <div class="sect">
+      <h2>Floor</h2>
+      <div class="stats">
+        <div class="stat"><div class="v" id="s-area">463</div><div class="k">m&sup2; rooms</div></div>
+        <div class="stat"><div class="v" id="s-rooms">28</div><div class="k">rooms</div></div>
+        <div class="stat"><div class="v" id="s-dev">23</div><div class="k">devices</div></div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <h2>Systems</h2>
+      <div class="sys">
+        <button class="sysrow" id="t-fa" type="button" aria-pressed="true">
+          <span class="dot" style="background:var(--sys-fire)"></span>
+          <span class="nm">Fire alarm</span><span class="ct" id="n-fa">23</span>
+        </button>
+      </div>
+      <div class="brk">
+        <div class="brkrow"><span class="dot sm" style="background:var(--sys-fire)"></span>
+          Smoke detectors<span class="n" id="n-sd">18</span></div>
+        <div class="brkrow"><span class="dot sm" style="background:var(--sys-fire)"></span>
+          Manual call points<span class="n" id="n-mcp">5</span></div>
+      </div>
+      <p class="note" style="margin-top:11px"><strong>CCTV, access control and data
+        are not shown.</strong> None are drawn on this plan, and no spacing rule in
+        the library tells the engine where they go. Placing them would be a guess
+        dressed as a layout.</p>
+    </div>
+
+    <div class="sect">
+      <h2>View</h2>
+      <div class="modes">
+        <button class="mode" id="m-orbit" type="button" aria-pressed="true">Overview</button>
+        <button class="mode" id="m-walk" type="button" aria-pressed="false">Walk</button>
+      </div>
+      <p class="hint" id="hint">Drag to orbit, scroll to zoom. Click any device to see the rule behind it.</p>
+      <label class="chk"><input type="checkbox" id="c-walls" checked> Walls, doors and glazing</label>
+      <label class="chk"><input type="checkbox" id="c-fit" checked> Interior fit-out</label>
+      <label class="chk"><input type="checkbox" id="c-labels" checked> Room labels</label>
+      <label class="chk"><input type="checkbox" id="c-halo" checked> Device markers</label>
+      <label class="chk"><input type="checkbox" id="c-cov" checked> Detector coverage (9.1 m cell)</label>
+      <label class="chk"><input type="checkbox" id="c-dim"> Dim the building</label>
+    </div>
+
+    <div class="sect" id="detail">
+      <h2>Device</h2>
+      <p class="empty" id="d-empty">Click a detector or call point in the model.</p>
+      <div id="d-body" hidden>
+        <div class="dev-h"><span class="dot" id="d-dot"></span><strong id="d-name"></strong>
+          <span class="tag">Proposed</span></div>
+        <dl>
+          <dt>Tag</dt><dd id="d-id"></dd>
+          <dt>Room</dt><dd id="d-room"></dd>
+          <dt>Position</dt><dd id="d-xy"></dd>
+          <dt>Height</dt><dd id="d-z"></dd>
+        </dl>
+        <div class="cite"><b>Position from</b><span id="d-psrc"></span></div>
+        <div class="cite"><b>Mounting height from</b><span id="d-hsrc"></span></div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <h2>Read this before quoting it</h2>
+      <div class="flag"><span class="n">1</span><span><strong>The devices are
+        proposals, not a design.</strong> Spacing is a maximum. Beams, diffusers,
+        airflow and ceiling geometry all move a detector, and every position needs
+        an engineer before it becomes scope.</span></div>
+      <div class="flag" style="margin-top:8px"><span class="n">2</span><span>
+        <strong>Devices are drawn true size.</strong> A detector is about 100 mm
+        across, so each one also carries a coloured marker and a stem. The marker
+        is a marker; the grey disc under it is the device.</span></div>
+      <div class="flag" style="margin-top:8px"><span class="n">3</span><span>
+        <strong>The plan is traced from an image.</strong> Rooms are faithful in
+        arrangement and close in size. They are not survey dimensions. Send the DXF
+        and the model is exact.</span></div>
+      <div class="flag" style="margin-top:8px"><span class="n">4</span><span>
+        <strong>The drawing's vertical chains disagree.</strong>
+        <span id="conflict"></span></span></div>
+      <div class="flag" style="margin-top:8px"><span class="n">5</span><span>
+        <strong>Ceiling height 3.00 m is assumed.</strong> It is not on a floor
+        plan. Give me the sections and it is read, not assumed.</span></div>
+    </div>
+
+    <div class="sect">
+      <h2>Interior</h2>
+      <p class="note">Furniture and sanitary fittings are <strong>indicative</strong>,
+        placed by room type so each space reads as what it is. They are not a
+        furniture schedule and carry no quantities. The blue <code>IMR</code> and
+        <code>CBM</code> codes on the drawing are not explained by a legend on this
+        sheet, so nothing has been inferred from them.</p>
+    </div>
+
+    <div class="sect">
+      <h2>Provenance</h2>
+      <p class="note">Rooms and areas: <code>cad.extract_rooms</code>. Detector
+        positions: <code>cad.place_devices</code> from <strong>ELV-B-01</strong>
+        (NFPA 72) &mdash; 9.1 m max spacing, 4.6 m max to any wall. Call points:
+        <strong>SPT-FA-11</strong> (NFPA 72 &sect;17.15.9) &mdash; within 1.5 m of
+        each exit door. Mounting heights: <strong>SPT-FA-12</strong> and
+        <strong>SPT-FA-01</strong>. All four are <code>code</code> confidence in the
+        rules library.</p>
+    </div>
+  </aside>
+</div>
