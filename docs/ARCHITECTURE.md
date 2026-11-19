@@ -765,6 +765,8 @@ finished.
 | CAD | `cad.extract_rooms` | nothing — outlines, labels, areas |
 | CAD | `cad.place_devices` | `drawing_objects` proposals from a cited spacing rule |
 | CAD | `cad.markup` | a **new** DXF with notes on an `SPI_MARKUP` layer |
+| CAD | `cad.takeoff_sheet` | a **new** DXF: devices ringed and tagged by system, a schedule per system, unmapped blocks in a red NOT COUNTED table, room areas — on `SPI_TAKEOFF` / `SPI_SCHEDULE` / `SPI_ROOMS` |
+| CAD | `cad.sheet_setup` | a **new** DXF on an `SPI_SHEET` layer: ISO 5457 frame and zones, ISO 7200 title block (missing mandatory fields drawn as MISSING and returned as `missing_data`), scale bar, north arrow only from a stated bearing |
 | Word | `word.fill_template` | .docx from a default or supplied template |
 | Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
 | Word | `word.to_pdf` | .pdf, via LibreOffice headless |

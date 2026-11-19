@@ -42,6 +42,60 @@ def point_in_polygon(x: float, y: float, poly: list[tuple[float, float]]) -> boo
     return inside
 
 
+def find_rooms(msp, boundary_layers: list[str], label_layers: list[str] | None,
+               min_area_units: float, mpu: float | None
+               ) -> tuple[list[dict], list[dict], list[str]]:
+    """Closed outlines on the boundary layers, each with the text labels inside
+    it. Shared by every tool that needs rooms, so they cannot disagree."""
+    warnings: list[str] = []
+    bl = {l.casefold() for l in boundary_layers}
+    ll = {l.casefold() for l in label_layers} if label_layers else None
+
+    labels: list[dict] = []
+    for e in msp:
+        if e.dxftype() not in ("TEXT", "MTEXT"):
+            continue
+        layer = str(getattr(e.dxf, "layer", ""))
+        if ll is not None and layer.casefold() not in ll:
+            continue
+        text = e.plain_text() if e.dxftype() == "MTEXT" else str(e.dxf.text)
+        if not text.strip():
+            continue
+        p = e.dxf.insert
+        labels.append({"text": text.strip(), "x": float(p[0]), "y": float(p[1]),
+                       "layer": layer})
+
+    rooms: list[dict] = []
+    for e in msp:
+        if e.dxftype() != "LWPOLYLINE":
+            continue
+        layer = str(getattr(e.dxf, "layer", ""))
+        if layer.casefold() not in bl:
+            continue
+        if not e.closed:
+            # An open outline has no inside, so it has no area and cannot hold a
+            # label. Reported, not silently closed for the author.
+            warnings.append(
+                f"An open polyline on layer '{layer}' was skipped: an unclosed "
+                "outline has no enclosed area.")
+            continue
+        pts = [(round(float(p[0]), 3), round(float(p[1]), 3))
+               for p in e.get_points("xy")]
+        area_u = polygon_area(pts)
+        if area_u <= min_area_units:
+            continue
+        inside = [l for l in labels if point_in_polygon(l["x"], l["y"], pts)]
+        rooms.append({
+            "name": inside[0]["text"] if len(inside) == 1 else None,
+            "candidate_labels": [l["text"] for l in inside],
+            "boundary": pts,
+            "layer": layer,
+            "area_drawing_units": round(area_u, 3),
+            "area_m2": round(area_u * mpu * mpu, 3) if mpu is not None else None,
+        })
+    return rooms, labels, warnings
+
+
 class RoomsInput(BaseModel):
     document_id: str
     storage_key: str
@@ -73,54 +127,10 @@ def extract_rooms(data: RoomsInput, storage: Storage | None = None) -> ToolResul
     insunits = int(doc.header.get("$INSUNITS", 0))
     unit_name, mpu = describe(insunits)
 
-    bl = {l.casefold() for l in data.boundary_layers}
-    ll = {l.casefold() for l in data.label_layers} if data.label_layers else None
-
-    labels: list[dict] = []
-    for e in msp:
-        if e.dxftype() not in ("TEXT", "MTEXT"):
-            continue
-        layer = str(getattr(e.dxf, "layer", ""))
-        if ll is not None and layer.casefold() not in ll:
-            continue
-        text = e.plain_text() if e.dxftype() == "MTEXT" else str(e.dxf.text)
-        if not text.strip():
-            continue
-        p = e.dxf.insert
-        labels.append({"text": text.strip(), "x": float(p[0]), "y": float(p[1]),
-                       "layer": layer})
-
-    rooms: list[dict] = []
-    unlabelled = 0
-    for e in msp:
-        if e.dxftype() != "LWPOLYLINE":
-            continue
-        layer = str(getattr(e.dxf, "layer", ""))
-        if layer.casefold() not in bl:
-            continue
-        if not e.closed:
-            # An open outline has no inside, so it has no area and cannot hold a
-            # label. Reported, not silently closed for the author.
-            res.warnings.append(
-                f"An open polyline on layer '{layer}' was skipped: an unclosed "
-                "outline has no enclosed area.")
-            continue
-        pts = [(round(float(p[0]), 3), round(float(p[1]), 3))
-               for p in e.get_points("xy")]
-        area_u = polygon_area(pts)
-        if area_u <= data.min_area_units:
-            continue
-        inside = [l for l in labels if point_in_polygon(l["x"], l["y"], pts)]
-        if not inside:
-            unlabelled += 1
-        rooms.append({
-            "name": inside[0]["text"] if len(inside) == 1 else None,
-            "candidate_labels": [l["text"] for l in inside],
-            "boundary": pts,
-            "layer": layer,
-            "area_drawing_units": round(area_u, 3),
-            "area_m2": round(area_u * mpu * mpu, 3) if mpu is not None else None,
-        })
+    rooms, labels, warnings = find_rooms(msp, data.boundary_layers,
+                                         data.label_layers, data.min_area_units, mpu)
+    res.warnings.extend(warnings)
+    unlabelled = sum(1 for r in rooms if not r["candidate_labels"])
 
     res.outputs = {
         "units": {"insunits": insunits, "name": unit_name, "metres_per_unit": mpu},

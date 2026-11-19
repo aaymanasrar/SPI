@@ -129,6 +129,27 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "cad.takeoff_sheet": {
+    name: "cad.takeoff_sheet",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    // A marked-up copy of the drawing with device schedules on SPI_* layers.
+    // Quantities are the same proposals cad.count_devices returns; the AI may
+    // draft the sheet, a person decides to keep or issue it.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "cad.sheet_setup": {
+    name: "cad.sheet_setup",
+    engine: "cad",
+    previewPermission: "craft.preview",
+    // Frame and title block make a drawing look issued. Approval and issue are
+    // a person's call; missing ISO 7200 fields come back as missing_data.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   "word.fill_template": {
     name: "word.fill_template",
     engine: "word",
