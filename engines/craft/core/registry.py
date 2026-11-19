@@ -11,7 +11,7 @@ from typing import Any, Callable, Literal
 
 from pydantic import BaseModel
 
-Engine = Literal["grid", "word", "cad", "pdf"]
+Engine = Literal["grid", "word", "cad", "pdf", "bim"]
 Mode = Literal["preview", "commit"]
 
 

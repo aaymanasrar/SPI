@@ -6,7 +6,7 @@ import type postgres from "postgres";
  * here and there cannot be one: the table rejects UPDATE at the database.
  */
 
-export type CraftEngine = "grid" | "word" | "cad" | "pdf";
+export type CraftEngine = "grid" | "word" | "cad" | "pdf" | "bim";
 export type CraftMode = "preview" | "commit";
 export type CraftStatus = "ok" | "missing_data" | "invalid_input" | "error";
 

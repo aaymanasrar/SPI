@@ -1,0 +1,29 @@
+{
+  "name": "IFC standard predefined types",
+  "version": "0.1",
+  "source_document": "buildingSMART IFC4 ADD2 TC1 enumerations (IfcSensorTypeEnum, IfcAlarmTypeEnum, IfcAudioVisualApplianceTypeEnum, IfcCommunicationsApplianceTypeEnum, IfcOutletTypeEnum). No family names are interpreted.",
+  "rules": [
+    {"ifc_class": "IfcSensor", "predefined_type": "SMOKESENSOR", "system": "fire_alarm", "device_type": "smoke_detector"},
+    {"ifc_class": "IfcSensor", "predefined_type": "HEATSENSOR", "system": "fire_alarm", "device_type": "heat_detector"},
+    {"ifc_class": "IfcSensor", "predefined_type": "MOVEMENTSENSOR", "system": "intrusion", "device_type": "motion_detector"},
+    {"ifc_class": "IfcSensor", "predefined_type": "CONTACTSENSOR", "system": "access_control", "device_type": "door_contact"},
+    {"ifc_class": "IfcSensor", "predefined_type": "IDENTIFIERSENSOR", "system": "access_control", "device_type": "card_reader"},
+
+    {"ifc_class": "IfcAlarm", "predefined_type": "MANUALPULLBOX", "system": "fire_alarm", "device_type": "manual_call_point"},
+    {"ifc_class": "IfcAlarm", "predefined_type": "BREAKGLASSBUTTON", "system": "fire_alarm", "device_type": "manual_call_point"},
+    {"ifc_class": "IfcAlarm", "predefined_type": "SIREN", "system": "fire_alarm", "device_type": "sounder"},
+    {"ifc_class": "IfcAlarm", "predefined_type": "BELL", "system": "fire_alarm", "device_type": "sounder"},
+    {"ifc_class": "IfcAlarm", "predefined_type": "LIGHT", "system": "fire_alarm", "device_type": "strobe"},
+
+    {"ifc_class": "IfcAudioVisualAppliance", "predefined_type": "CAMERA", "system": "cctv", "device_type": "camera"},
+    {"ifc_class": "IfcAudioVisualAppliance", "predefined_type": "SPEAKER", "system": "public_address", "device_type": "speaker"},
+
+    {"ifc_class": "IfcCommunicationsAppliance", "predefined_type": "ROUTER", "system": "data", "device_type": "router"},
+    {"ifc_class": "IfcCommunicationsAppliance", "predefined_type": "NETWORKHUB", "system": "data", "device_type": "network_switch"},
+    {"ifc_class": "IfcCommunicationsAppliance", "predefined_type": "NETWORKBRIDGE", "system": "data", "device_type": "network_switch"},
+
+    {"ifc_class": "IfcOutlet", "predefined_type": "DATAOUTLET", "system": "data", "device_type": "data_outlet"},
+    {"ifc_class": "IfcOutlet", "predefined_type": "TELEPHONEOUTLET", "system": "data", "device_type": "telephone_outlet"},
+    {"ifc_class": "IfcOutlet", "predefined_type": "POWEROUTLET", "ignore": true, "note": "Power sockets belong to the electrical package, not an ELV take-off."}
+  ]
+}

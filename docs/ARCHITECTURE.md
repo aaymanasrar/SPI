@@ -768,6 +768,22 @@ finished.
 | Word | `word.fill_template` | .docx from a default or supplied template |
 | Word | `word.compliance_sheet` | Comply/Deviate/Clarify .docx |
 | Word | `word.to_pdf` | .pdf, via LibreOffice headless |
+| BIM | `bim.read_ifc` | nothing — schema, authoring tool, units, storeys, element classes and types |
+| BIM | `bim.count_devices` | `drawing_objects` rows, `source='imported'`, `review_status='pending'`, per storey |
+| BIM | `bim.extract_spaces` | nothing — rooms, storeys, areas from the model's own quantities |
+| BIM | `bim.scene_3d` | nothing — room outlines and heights, device positions; feeds the simulator |
+
+BIM reads **IFC**, which Revit exports natively; `.rvt` is recognised and refused with the export
+route, because it is undocumented, changes every release and may not be reverse-engineered under
+Autodesk's licence. The STEP reader is our own: IfcOpenShell is LGPL-3.0. Revit's export habits
+(location baked into geometry, devices contained in the storey rather than the room, proxies) and
+the reasons are in `docs/decisions/0002-bim-engine.md`. Family-to-device mapping is an
+`ElementMap`, data with a required `source_document`, exactly as §18.5 describes for symbols.
+
+`simulator/` builds a page from `bim.scene_3d`: the model in 3D, plan and walk views, coverage
+checks against SPT-FA-01/02/04/13 and SPT-CC-01/03/09, what-if proposals, and a fire-drill
+sequence. `simulator/rules.py` copies those rules out of migration 0017 and stops the build if
+their text no longer states the values the page applies.
 
 `cad.place_devices` is implemented. It was a stub while nothing could supply a spacing figure with
 a source; the rules library now carries them, and the rule is passed in as data — `max_spacing_m`,

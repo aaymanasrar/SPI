@@ -1,0 +1,103 @@
+<body>
+<main id="stage">
+  <canvas id="canvas" tabindex="0" aria-label="3D model of the building and its ELV devices"></canvas>
+  <div id="labels"></div>
+
+  <div id="hud">
+    <div class="chip"><span class="title" id="title">Building simulator</span><span class="pill" id="statusPill">—</span></div>
+    <div class="chip" title="Storey">
+      <select id="storeySel" aria-label="Storey"></select>
+    </div>
+    <div class="chip" role="group" aria-label="View">
+      <button class="seg" id="viewOrbit" aria-pressed="true" title="Orbit (drag to turn, right-drag or shift-drag to pan, wheel to zoom)">3D</button>
+      <button class="seg" id="viewPlan" aria-pressed="false" title="Plan, north up">Plan</button>
+      <button class="seg" id="viewWalk" aria-pressed="false" title="Walk at eye height (WASD or arrows, drag to look)">Walk</button>
+    </div>
+    <div class="chip" role="group" aria-label="Mode">
+      <button class="seg" id="modeInspect" aria-pressed="true">Inspect</button>
+      <button class="seg" id="modeCoverage" aria-pressed="false">Coverage</button>
+      <button class="seg" id="modeDrill" aria-pressed="false">Fire drill</button>
+    </div>
+  </div>
+
+  <div id="walkHint">Walk: W A S D or arrow keys · drag to look · Shift to hurry · Esc to leave</div>
+  <div id="placeHint"></div>
+  <div id="legendCov"></div>
+  <div id="drillBar" role="group" aria-label="Drill playback">
+    <button class="btn sm" id="drillPlay">Play</button>
+    <span id="drillClock">0:00</span>
+    <select id="drillSpeed" class="btn sm" aria-label="Playback speed">
+      <option value="1">1×</option><option value="5" selected>5×</option><option value="20">20×</option>
+    </select>
+    <button class="btn sm" id="drillReset">Reset</button>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="dropHint">Drop a scene JSON to open it</div>
+  <div id="empty"><div>No scene loaded.<br><br>Build one from an IFC file with<br><code>simulator/build.sh model.ifc</code><br>or open a scene JSON from the panel.</div></div>
+</main>
+
+<aside id="rail">
+  <section class="sec">
+    <h2>Model</h2>
+    <div id="modelInfo"></div>
+  </section>
+
+  <section class="sec">
+    <h2>Mode</h2>
+    <div id="modePanel"></div>
+  </section>
+
+  <section class="sec">
+    <h2>Selection</h2>
+    <div id="inspector"><p class="note">Click a device or a room.</p></div>
+  </section>
+
+  <section class="sec" id="bldSection" style="display:none">
+    <h2>Building</h2>
+    <div id="bldInfo"></div>
+    <div class="field"><label for="wallMode">Walls</label>
+      <select id="wallMode"><option value="solid">solid</option><option value="ghost">see-through</option><option value="hidden">hidden</option></select></div>
+    <div class="layers" id="layerList">
+      <label class="chk"><input type="checkbox" id="show-doors" checked> Doors</label>
+      <label class="chk"><input type="checkbox" id="show-windows" checked> Windows</label>
+      <label class="chk"><input type="checkbox" id="show-floors" checked> Floors</label>
+      <label class="chk"><input type="checkbox" id="show-slabs" checked> Slabs</label>
+      <label class="chk"><input type="checkbox" id="show-roof" checked> Roof</label>
+      <label class="chk"><input type="checkbox" id="show-stairs" checked> Stairs</label>
+      <label class="chk"><input type="checkbox" id="show-furniture" checked> Furniture</label>
+      <label class="chk"><input type="checkbox" id="show-ceilings"> Ceilings</label>
+      <label class="chk"><input type="checkbox" id="show-devices" checked> Devices</label>
+      <label class="chk"><input type="checkbox" id="show-ground" checked> Ground</label>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn sm" id="showAll">Show everything</button>
+      <button class="btn sm" id="showPlan">Plan only</button>
+    </div>
+    <div class="field"><label for="optExplode">Separate the floors</label><input type="range" id="optExplode" min="0" max="6" step="0.5" value="0"></div>
+    <div class="field"><label for="optCut">Section cut</label><input type="range" id="optCut" min="0" max="100" step="1" value="100"></div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="exportGlb">Export 3D model (.glb)</button></div>
+  </section>
+
+  <section class="sec">
+    <h2>Show</h2>
+    <div id="sysList"></div>
+    <label class="chk"><input type="checkbox" id="optWalls" checked> Walls, columns and slabs</label>
+    <label class="chk"><input type="checkbox" id="optLabels" checked> Room labels</label>
+    <label class="chk"><input type="checkbox" id="optBig" checked> Enlarge devices (×2.5)</label>
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" id="themeBtn">Theme</button>
+      <button class="btn sm" id="openScene">Open scene JSON…</button>
+      <input type="file" id="sceneFile" accept=".json,application/json" hidden>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>From the model</h2>
+    <div id="findings"></div>
+  </section>
+
+  <section class="sec">
+    <h2>Rules applied</h2>
+    <div id="rulesList"></div>
+  </section>
+</aside>

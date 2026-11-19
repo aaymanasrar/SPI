@@ -11,3 +11,10 @@ chains disagree by 2.16 m and which one was used.
 
 Replace this with a client DXF and none of it is needed: the tools read a DXF
 directly. It exists because no client drawing has been supplied.
+
+`revit_elv_office.py` writes a two-storey office as Revit's IFC exporter would
+(IFC4 or IFC2X3), with ELV devices in it. It stands in for a client Revit model,
+which has not been supplied either; the public Revit samples are architectural
+or structural and contain no devices. Its gaps are deliberate: the open office is
+one detector short and the meeting room has none. `spt_element_map.json` is the
+family-naming map that goes with it, and is marked as a fixture.

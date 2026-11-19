@@ -55,7 +55,7 @@ export type CraftResult = {
 
 export type ToolSchema = {
   name: string;
-  engine: "grid" | "word" | "cad" | "pdf";
+  engine: "grid" | "word" | "cad" | "pdf" | "bim";
   summary: string;
   modes: ("preview" | "commit")[];
   implemented: boolean;
@@ -73,9 +73,14 @@ function baseUrl(tool: string): string {
   return BASE.replace(/\/+$/, "");
 }
 
-async function call<T>(tool: string, path: string, init?: RequestInit): Promise<T> {
+async function call<T>(
+  tool: string,
+  path: string,
+  init?: RequestInit,
+  timeoutMs: number = TIMEOUT_MS
+): Promise<T> {
   const url = `${baseUrl(tool)}${path}`;
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
+  const signal = AbortSignal.timeout(timeoutMs);
   let response: Response;
   try {
     response = await fetch(url, {
@@ -89,7 +94,7 @@ async function call<T>(tool: string, path: string, init?: RequestInit): Promise<
     throw new CraftServiceError(
       tool,
       timedOut ? "timeout" : "unreachable",
-      timedOut ? `No response within ${TIMEOUT_MS} ms` : String(cause)
+      timedOut ? `No response within ${timeoutMs} ms` : String(cause)
     );
   }
   if (!response.ok) {
@@ -114,7 +119,8 @@ export async function listTools(): Promise<ToolSchema[]> {
 /**
  * Run one tool. Throws CraftMissingDataError when the engine declined to invent
  * a value, so runAction can name the missing fields rather than showing a
- * generic failure.
+ * generic failure — unless the caller can show a partial result, as a 3D scene
+ * with some elements uncounted can, and says so with acceptMissingData.
  */
 export async function runTool(
   tool: string,
@@ -123,6 +129,9 @@ export async function runTool(
     input: Record<string, unknown>;
     storageRoot?: string;
     operationId?: string;
+    acceptMissingData?: boolean;
+    /** Whole drawing sets take longer than one file; defaults to CRAFT_SERVICE_TIMEOUT_MS. */
+    timeoutMs?: number;
   }
 ): Promise<CraftResult> {
   const result = await call<CraftResult>(tool, `/tools/${encodeURIComponent(tool)}`, {
@@ -133,8 +142,8 @@ export async function runTool(
       storage_root: args.storageRoot ?? null,
       operation_id: args.operationId ?? null,
     }),
-  });
-  if (result.status === "missing_data") {
+  }, args.timeoutMs);
+  if (result.status === "missing_data" && !args.acceptMissingData) {
     throw new CraftMissingDataError(tool, result.missing);
   }
   return result;

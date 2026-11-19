@@ -33,6 +33,7 @@ const MIME_CLASSIFICATION: Record<string, string> = {
   "application/pdf": "compliance",
   "image/vnd.dxf": "drawing",
   "application/dxf": "drawing",
+  "application/x-step": "drawing",
 };
 
 export async function runCraftToolAction(

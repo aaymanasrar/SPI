@@ -165,6 +165,41 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
     aiMayPreview: true,
     aiMayCommit: false,
   },
+  "bim.read_ifc": {
+    name: "bim.read_ifc",
+    engine: "bim",
+    previewPermission: "craft.preview",
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "bim.count_devices": {
+    name: "bim.count_devices",
+    engine: "bim",
+    previewPermission: "craft.preview",
+    // Same contract as cad.count_devices: drawing_objects rows with
+    // source='imported' and review_status='pending', promoted by review.
+    commitPermission: "craft.commit",
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "bim.extract_spaces": {
+    name: "bim.extract_spaces",
+    engine: "bim",
+    previewPermission: "craft.preview",
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
+  "bim.scene_3d": {
+    name: "bim.scene_3d",
+    engine: "bim",
+    previewPermission: "craft.preview",
+    // Feeds the simulator. Reads a model and writes nothing.
+    commitPermission: null,
+    aiMayPreview: true,
+    aiMayCommit: false,
+  },
   // cad.measure_route is deliberately absent. It is registered in the engine as
   // implemented=false and raises NotImplementedError; listing it here would
   // advertise it to the orchestrator as callable. See D-7.
